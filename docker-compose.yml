@@ -1,0 +1,36 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - '3000:3000'
+    networks:
+      - hack_network
+  
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: backend
+  #   ports:
+  #     - '8080:8080' # Заменить на актуальное
+  #   networks:
+  #     - hack_network
+    
+  db:
+    image: postgres:latest # Лучше проставить версию
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: alpha_hack
+    expose:
+      - "15432:5432"
+    networks:
+      - hack_network
+
+networks:
+  hack_network:
+    driver: bridge
