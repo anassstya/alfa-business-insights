@@ -1,0 +1,8 @@
+@font-face {
+  font-family: 'NotoSans';
+  src: url("./fonts/NotoSansMono-VariableFont_wdth\,wght.ttf");
+}
+
+body {
+  margin: 0;
+}
