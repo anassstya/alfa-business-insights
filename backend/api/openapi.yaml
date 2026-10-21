@@ -1,9 +1,10 @@
+
 openapi: 3.0.3
 
 info:
   title: Alfa Business Insights API
   version: 1.0.0
-  
+
 servers:
   - url: http://localhost:8080
     description: Local Go backend
@@ -14,7 +15,7 @@ paths:
       tags:
         - Roles
       summary: Получить список ролей
-      description: Возвращает все доступные роли для персонализации аналитики.
+      description: Возвращает все доступные роли для персонализации аналитики
       operationId: getRoles
 
       responses:
@@ -48,108 +49,58 @@ paths:
                   - code: cfo
                     full_name: Финансовый директор
 
-  /api/v1/companies:
+  /api/v1/demo/users:
     get:
-      summary: Получить список компаний
-
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
-
-        - name: offset
-          in: query
-          schema:
-            type: integer
-            default: 0
-
-        - name: city
-          in: query
-          schema:
-            type: string
-
-        - name: region
-          in: query
-          schema:
-            type: string
-
-        - name: industry
-          in: query
-          schema:
-            type: string
+      tags:
+        - Demo Users
+      summary: Получить список демопользователей
+      description: Возвращает список тестовых пользователей для выбора профиля при входе в приложение
+      operationId: getDemoUsers
 
       responses:
         '200':
-          description: Список компаний
+          description: Список демопользователей успешно получен
           content:
             application/json:
               schema:
                 type: object
+                required:
+                  - users
                 properties:
-                  items:
+                  users:
                     type: array
                     items:
                       type: object
+                      required:
+                        - id
+                        - synthetic_f
+                        - first_name
+                        - last_name
                       properties:
                         id:
                           type: integer
-                        synthetic_u:
+                          format: int64
+                          example: 1
+                        synthetic_f:
                           type: string
-                        industry_name:
+                          example: F_25503
+                        first_name:
                           type: string
-                        city:
+                          example: Александр
+                        last_name:
                           type: string
-                        region:
-                          type: string
-                  total:
-                    type: integer
-
-  /api/v1/companies/{id}:
-    get:
-      summary: Получить подробную информацию о компании
-
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Уникальный ID записи компании
-          schema:
-            type: integer
-            format: int64
-
-      responses:
-        '200':
-          description: Информация о компании
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: integer
-                    format: int64
-                  synthetic_u:
-                    type: string
-                  org_type:
-                    type: string
-                  industry_code:
-                    type: string
-                  industry_name:
-                    type: string
-                  company_age_years_gradation:
-                    type: string
-                  amount_workers_fns_gradation:
-                    type: string
-                  revenue_company:
-                    type: number
-                  city:
-                    type: string
-                  region:
-                    type: string
-                  cl_type:
-                    type: string
-
-        '404':
-          description: Компания не найдена
+                          example: Иванов
+              example:
+                users:
+                  - id: 1
+                    synthetic_f: F_25503
+                    first_name: Александр
+                    last_name: Иванов
+                  - id: 2
+                    synthetic_f: F_93095
+                    first_name: Мария
+                    last_name: Петрова
+                  - id: 3
+                    synthetic_f: F_11036
+                    first_name: Дмитрий
+                    last_name: Сидоров
