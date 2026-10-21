@@ -1,5 +1,3 @@
-\set ON_ERROR_STOP on
-
 BEGIN;
 
 DO $$
@@ -12,7 +10,6 @@ BEGIN
 END IF;
 END
 $$;
-
 
 COPY companies (
     synthetic_u, org_type, okfs_name,

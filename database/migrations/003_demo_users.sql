@@ -1,5 +1,3 @@
-\set ON_ERROR_STOP on
-
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS demo_users (

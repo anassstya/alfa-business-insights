@@ -6,7 +6,13 @@
 #### TODO: Дописать docker-compose
 ##### SUGGEST: Безопасно не пробрасывать порты бд и бэковских приложений наружу без надобности, тут придется прокинуть backend наружу, так как фронт не будет работать без этого (связано с тем как браузер рендерит СПА)
 
+Подтнять бекенд:
+1) В корне проекта создать .env (по примеру .env.example) и заменить пароль
+2) Из корня проекта: docker compose up -d --build backend
 
-1) Создать .env в корне проекта
-2) Добавить CSV-файлы в database/data/
-3) Из корня проекта выполнить docker compose up -d --build db backend
+(БД отдельно запускать не надо: backend автоматически подключается к общей PostgreSQL в Supabase через DATABASE_URL)
+
+Как запустить Swagger UI:
+Из корня проекта выполнить:
+1) docker run -d --name swagger-ui -p 8081:8080 -e SWAGGER_JSON=/api/openapi.yaml -v "$(pwd)/backend/api:/api:ro" swaggerapi/swagger-ui
+2) Перейти на http://localhost:8081
