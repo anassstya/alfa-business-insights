@@ -3,8 +3,51 @@ openapi: 3.0.3
 info:
   title: Alfa Business Insights API
   version: 1.0.0
+  
+servers:
+  - url: http://localhost:8080
+    description: Local Go backend
 
 paths:
+  /api/v1/roles:
+    get:
+      tags:
+        - Roles
+      summary: Получить список ролей
+      description: Возвращает все доступные роли для персонализации аналитики.
+      operationId: getRoles
+
+      responses:
+        '200':
+          description: Список ролей успешно получен
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - roles
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - code
+                        - full_name
+                      properties:
+                        code:
+                          type: string
+                          example: cfo
+                        full_name:
+                          type: string
+                          example: Финансовый директор
+              example:
+                roles:
+                  - code: ceo
+                    full_name: Генеральный директор
+                  - code: cfo
+                    full_name: Финансовый директор
+
   /api/v1/companies:
     get:
       summary: Получить список компаний
