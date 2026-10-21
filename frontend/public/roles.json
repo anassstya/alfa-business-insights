@@ -1,0 +1,7 @@
+[
+  { "value": "owner", "label": "Собственник" },
+  { "value": "ceo", "label": "Генеральный директор" },
+  { "value": "cfo", "label": "Финансовый директор" },
+  { "value": "accountant", "label": "Бухгалтер" },
+  { "value": "lawyer", "label": "Юрист" }
+]
