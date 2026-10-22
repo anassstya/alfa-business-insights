@@ -1,10 +1,17 @@
 import { MainLogo } from "@/shared"
-import { HeaderStyled } from "./Header.styled"
+import { SelectOrganization, SelectRole } from "@/features"
+import { Context, HeaderInner, HeaderStyled } from "./Header.styled"
 
 const Header = () => {
   return (
     <HeaderStyled>
-      <MainLogo />
+      <HeaderInner>
+        <MainLogo />
+        <Context>
+          <SelectOrganization />
+          <SelectRole />
+        </Context>
+      </HeaderInner>
     </HeaderStyled>
   )
 }
