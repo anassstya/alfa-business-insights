@@ -1,3 +1,6 @@
 .idea
 database/data/
 .env
+
+# Local Alpha Bank reference PDFs
+ml/data/reference_pdfs/*.pdf
