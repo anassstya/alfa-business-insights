@@ -43,9 +43,14 @@ func main() {
 	demoUserRepo := repo.NewDemoUserRepository(db)
 	demoUserHandler := handler.NewDemoUserHandler(demoUserRepo)
 
+	companyRepo := repo.NewCompanyRepository(db)
+	companyHandler := handler.NewCompanyHandler(companyRepo)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/roles", roleHandler.GetRoles)
 	mux.HandleFunc("GET /api/v1/demo/users", demoUserHandler.GetUsers)
+	mux.HandleFunc("GET /api/v1/demo/users/{id}/companies", companyHandler.GetByDemoUserID)
+	mux.HandleFunc("GET /api/v1/companies", companyHandler.GetAll)
 
 	server := &http.Server{
 		Addr:              ":8080",
