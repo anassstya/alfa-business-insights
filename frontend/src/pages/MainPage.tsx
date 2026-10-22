@@ -1,4 +1,4 @@
-import { CompanyCard, getRoleLabel, useSession } from "@/entities"
+import { CompanyCard, useRoleContext, useSession } from "@/entities"
 import { Title } from "@/shared"
 import { NewsFeed } from "@/widgets"
 import { Aside, Content, Hero, HeroSubtitle, MainPageStyled } from "./MainPage.styled"
@@ -6,12 +6,14 @@ import { Aside, Content, Hero, HeroSubtitle, MainPageStyled } from "./MainPage.s
 const MainPage = () => {
   const { companyId, role } = useSession();
 
+  const roles = useRoleContext();
+
   return (
     <MainPageStyled>
       <Hero>
         <Title.H2>Новости для вашего бизнеса</Title.H2>
         <HeroSubtitle>
-          Подборка для роли <b>{getRoleLabel(role)}</b> — только то, что влияет на вашу компанию
+          Подборка для роли <b>{roles.find(r => r.code === role)?.full_name ?? 'Роль не найдена'}</b> — только то, что влияет на вашу компанию
         </HeroSubtitle>
       </Hero>
 

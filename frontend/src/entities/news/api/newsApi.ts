@@ -10,7 +10,7 @@ import type { NewsItem, NewsParams } from "../model/types";
  *   200:   { items: NewsItem[], total: number }
  */
 const getNews = async (params: NewsParams, signal?: AbortSignal) => {
-  const { data } = await apiClient.get<PaginatedResponse<NewsItem>>('/api/v1/news', { params, signal });
+  const { data } = await apiClient.get<PaginatedResponse<NewsItem>>('/v1/news', { params, signal });
 
   return data;
 }

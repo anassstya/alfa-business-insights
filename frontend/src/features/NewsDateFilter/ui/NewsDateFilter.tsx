@@ -21,7 +21,7 @@ const NewsDateFilter = ({ value, onChange }: Props) => {
         )}
       </FilterHeader>
 
-      <Presets role="radiogroup" aria-label="Период публикации">
+      <Presets>
         {DATE_PRESETS.map(preset => (
           <Chip
             key={preset.value}

@@ -1,12 +1,16 @@
-import { useState, type PropsWithChildren } from "react";
-import type { RoleId } from "./roles";
+import { type PropsWithChildren } from "react";
 import { RoleContext } from "./RoleContext";
+import { useQuery } from "@tanstack/react-query";
+import { getRole } from "../api";
 
-const RoleProvider = ({roles, children}: { roles: Array<{role: RoleId, label: string}>} & PropsWithChildren) => {
-  const [currentRoles, setRoles] = useState(() => roles);
+const RoleProvider = ({ children }: PropsWithChildren) => {
+  const { data = [] } = useQuery({
+    queryKey: ['roles'],
+    queryFn: getRole,
+  })
 
   return (
-    <RoleContext.Provider value={currentRoles}>
+    <RoleContext.Provider value={data}>
       {children}
     </RoleContext.Provider>
   )

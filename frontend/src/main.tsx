@@ -8,28 +8,21 @@ import { MainPage } from './pages';
 import { Entrypoint, Header } from './widgets';
 import { RoleProvider, SessionProvider } from './entities';
 
-init().then(async (data) => {
-  if (import.meta.env.VITE_API_MOCKS === 'true') {
-    const { enableMocks } = await import('./mocks');
-    enableMocks(apiClient);
-  }
-  return data
-}).then(data => 
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <RoleProvider roles={data}>
-            <SessionProvider>
-              <Entrypoint />
-              <Layout>
-                <Header />
-                <MainPage />
-              </Layout>
-            </SessionProvider>
-            <Toaster />
-          </RoleProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </StrictMode>
-))
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <RoleProvider>
+          <SessionProvider>
+            <Entrypoint />
+            <Layout>
+              <Header />
+              <MainPage />
+            </Layout>
+          </SessionProvider>
+          <Toaster />
+        </RoleProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  </StrictMode>
+)

@@ -1,11 +1,10 @@
 import { createContext } from "react";
-import type { RoleId } from "@/entities/role";
 
 interface SessionContextValue {
   companyId: number | null;
-  role: RoleId | null;
+  role: string | null;
   setCompanyId(id: number | null): void;
-  setRole(role: RoleId): void;
+  setRole(role: string): void;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);

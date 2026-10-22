@@ -12,3 +12,4 @@ export * from './Chip';
 export * from './Skeleton';
 export * from './DateField';
 export * from './Modal';
+export * from './Radio';
