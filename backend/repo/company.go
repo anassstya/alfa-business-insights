@@ -41,7 +41,7 @@ func (r *CompanyRepository) GetByDemoUserID(ctx context.Context, userID int64) (
 			c.synthetic_u,
 			c.city,
 			c.region,
-			c.revenue_company,
+			NULLIF(c.revenue_company, 1000) AS revenue_company,
 			c.mainokved_name,
 			c.mainokved_code,
 			c.org_type,
@@ -56,6 +56,7 @@ func (r *CompanyRepository) GetByDemoUserID(ctx context.Context, userID int64) (
 		JOIN companies c
 			ON pcl.synthetic_u = c.synthetic_u
 		WHERE u.id = $1
+			AND c.cl_type = 'CLIENT'
 		ORDER BY c.id
 	`, userID)
 
@@ -105,6 +106,7 @@ func (r *CompanyRepository) GetAll(ctx context.Context, limit int, offset int) (
 	err := r.db.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM companies
+		WHERE cl_type = 'CLIENT'
 	`).Scan(&total)
 
 	if err != nil {
@@ -117,7 +119,7 @@ func (r *CompanyRepository) GetAll(ctx context.Context, limit int, offset int) (
 			synthetic_u,
 			city,
 			region,
-			revenue_company,
+			NULLIF(revenue_company, 1000) AS revenue_company,
 			mainokved_name,
 			mainokved_code,
 			org_type,
@@ -127,6 +129,7 @@ func (r *CompanyRepository) GetAll(ctx context.Context, limit int, offset int) (
 			amount_workers_fns_gradation,
 			cl_type
 		FROM companies
+		WHERE cl_type = 'CLIENT'
 		ORDER BY id
 		LIMIT $1 OFFSET $2
 	`, limit, offset)
