@@ -232,7 +232,7 @@ paths:
     get:
       tags:
         - Companies
-      summary: Получить список всех компаний
+      summary: Получить список всех компаний (только активных пользователей)
       description: Возвращает компании из базы данных с пагинацией
       operationId: getCompanies
 
