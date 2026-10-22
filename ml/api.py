@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 
-BASE_URL = "https://changellenge.up.railway.app/v1"
+BASE_URL = "https://api.alfahack-gateway26.ru/v1"
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
 
 
