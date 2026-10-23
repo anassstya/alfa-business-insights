@@ -1,5 +1,5 @@
 import styled from "styled-components";
-import { BREAKPOINTS, Container } from "@/shared";
+import { BREAKPOINTS } from "@/shared";
 
 const HeaderStyled = styled.header`
   position: sticky;
@@ -13,18 +13,22 @@ const HeaderStyled = styled.header`
   }
 `
 
-const HeaderInner = styled(Container)`
+const HeaderInner = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding-top: 12px;
-  padding-bottom: 12px;
+
+  padding: 12px 32px 12px;
 
   @media ${BREAKPOINTS.belowDesktop} {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+  }
+
+  @media ${BREAKPOINTS.phone} {
+    padding: 0 16px;
   }
 `
 
