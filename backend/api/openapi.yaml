@@ -232,7 +232,7 @@ paths:
     get:
       tags:
         - Companies
-      summary: Получить список всех компаний (только активных пользователей)
+      summary: Получить список всех компаний (только активных)
       description: Возвращает компании из базы данных с пагинацией
       operationId: getCompanies
 
@@ -365,3 +365,85 @@ paths:
 
         '500':
           description: Внутренняя ошибка сервера
+
+  /api/v1/companies/{companyID}/analysis:
+    post:
+      tags:
+        - Companies
+      summary: Запустить анализ компании
+      description: >
+        Запускает асинхронное формирование бизнес-инсайтов
+        для выбранной компании с учетом роли демопользователя.
+        
+        После проверки задача передается ML-агенту.
+        Ответ содержит идентификатор задачи для отслеживания
+        ее выполнения через SSE.
+
+      parameters:
+        - name: companyID
+          in: path
+          required: true
+          description: Уникальный числовой ID компании из таблицы companies
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+
+      requestBody:
+        required: true
+        description: Данные для запуска анализа компании
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - demo_user_id
+                - role
+              properties:
+                demo_user_id:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                  description: ID выбранного демопользователя
+
+                role:
+                  type: string
+                  description: Роль пользователя, для которой формируется аналитика
+                  enum:
+                    - owner
+                    - accountant
+                    - ceo
+                    - treasurer
+                    - cfo
+                    - other_c_level
+                    - decision_maker
+
+      responses:
+        '202':
+          description: Задача анализа создана и поставлена в обработку
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job_id
+                properties:
+                  job_id:
+                    type: string
+                    format: uuid
+                    description: Уникальный идентификатор задачи анализа
+
+        '400':
+          description: Некорректный ID пользователя, компании или роль
+
+        '404':
+          description: >
+            Компания или демопользователь не найдены,
+            либо компания не связана с пользователем,
+            либо компания не является действующим клиентом
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+        '503':
+          description: Не удалось передать задачу на обработку
