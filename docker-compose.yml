@@ -21,6 +21,23 @@ services:
     networks:
       - hack_network
 
+  ml:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    container_name: ml
+    ports:
+      - "8000:8000"
+    volumes:
+      - ml_data:/app/data
+      - model_cache:/models/huggingface
+    networks:
+      - hack_network
+
+volumes:
+  ml_data:
+  model_cache:
+
 networks:
   hack_network:
     driver: bridge

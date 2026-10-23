@@ -3,5 +3,8 @@ python-dotenv
 pymupdf
 pytesseract
 pillow
-sentence-transformers
 numpy
+fastapi
+uvicorn[standard]
+python-multipart
+rank-bm25

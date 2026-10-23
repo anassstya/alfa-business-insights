@@ -1,76 +1,39 @@
-import json
+import re
+from rank_bm25 import BM25Okapi
 
-import numpy as np
-from sentence_transformers import SentenceTransformer
+_TOKEN_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё]+", re.UNICODE)
 
-from config import CHUNKS_PATH, EMBEDDINGS_PATH
-
-MODEL_NAME = "intfloat/multilingual-e5-small"
-
+def tokenize(text: str) -> list[str]:
+    return [word.casefold().replace("ё", "е") for word in _TOKEN_RE.findall(text)]
 
 class DocumentSearch:
-    def __init__(self):
-        with CHUNKS_PATH.open("r", encoding="utf-8") as file:
-            self.chunks = [
-                json.loads(line)
-                for line in file
-                if line.strip()
-            ]
+    def __init__(self, chunks: list[dict] | None = None):
+        self.chunks = []
+        self._bm25 = None
+        self.replace_chunks(chunks or [])
 
-        self.embeddings = np.load(EMBEDDINGS_PATH)
+    def replace_chunks(self, chunks: list[dict]) -> None:
+        self.chunks = list(chunks)
+        tokenized = [tokenize(chunk.get("text", "")) for chunk in self.chunks]
+        self._bm25 = BM25Okapi(tokenized) if any(tokenized) else None
 
-        if len(self.chunks) != len(self.embeddings):
-            raise ValueError(
-                "Количество текстовых фрагментов "
-                "не совпадает с количеством векторов."
-            )
-
-        self.model = SentenceTransformer(MODEL_NAME)
-
-    def search(self, question, top_k=5):
-        question_vector = self.model.encode(
-            ["query: " + question],
-            normalize_embeddings=True,
-            convert_to_numpy=True,
-        )[0]
-
-        # Векторы уже нормализованы, поэтому скалярное
-        # произведение соответствует cosine similarity.
-        scores = self.embeddings @ question_vector
-
-        # Индексы top_k наиболее подходящих фрагментов.
-        top_indices = np.argsort(scores)[::-1][:top_k]
-
+    def search(self, question: str, top_k: int = 5) -> list[dict]:
+        tokens = tokenize(question)
+        if not tokens or not self.chunks or self._bm25 is None:
+            return []
+        scores = self._bm25.get_scores(tokens)
+        ranked = sorted(enumerate(scores), key=lambda pair: pair[1], reverse=True)
         results = []
-
-        for index in top_indices:
+        for index, score in ranked:
+            if len(results) >= top_k:
+                break
+            if score <= 0:
+                continue
             chunk = self.chunks[index]
-
             results.append({
-                "text": chunk["text"],
-                "source": chunk["source"],
-                "page_start": chunk["page_start"],
-                "page_end": chunk["page_end"],
-                "extraction_method": chunk["extraction_method"],
-                "score": float(scores[index]),
+                "text": chunk["text"], "source": chunk["source"],
+                "page_start": chunk["page_start"], "page_end": chunk["page_end"],
+                "extraction_method": chunk.get("extraction_method", "text"),
+                "score": float(score),
             })
-
         return results
-
-
-if __name__ == "__main__":
-    search_engine = DocumentSearch()
-
-    question = input("Введите вопрос по документам: ")
-    results = search_engine.search(question)
-
-    for number, result in enumerate(results, start=1):
-        print(f"\nРезультат {number}")
-        print(f"Источник: {result['source']}")
-        print(
-            f"Страница: {result['page_start']}"
-            f"-{result['page_end']}"
-        )
-        print(f"Метод извлечения: {result['extraction_method']}")
-        print(f"Сходство: {result['score']:.4f}")
-        print(f"Текст: {result['text']}")
