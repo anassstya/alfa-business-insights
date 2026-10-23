@@ -9,6 +9,7 @@ import (
 
 	"alfa-business-insights/backend/handler"
 	"alfa-business-insights/backend/repo"
+	"alfa-business-insights/backend/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -43,9 +44,20 @@ func main() {
 	demoUserRepo := repo.NewDemoUserRepository(db)
 	demoUserHandler := handler.NewDemoUserHandler(demoUserRepo)
 
+	companyRepo := repo.NewCompanyRepository(db)
+	companyHandler := handler.NewCompanyHandler(companyRepo)
+
+	analysisRepo := repo.NewAnalysisRepository(db)
+	analysisService := service.NewAnalysisService(analysisRepo)
+	analysisHandler := handler.NewAnalysisHandler(analysisService)
+
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("GET /api/v1/roles", roleHandler.GetRoles)
 	mux.HandleFunc("GET /api/v1/demo/users", demoUserHandler.GetUsers)
+	mux.HandleFunc("GET /api/v1/demo/users/{id}/companies", companyHandler.GetByDemoUserID)
+	mux.HandleFunc("GET /api/v1/companies", companyHandler.GetAll)
+	mux.HandleFunc("POST /api/v1/companies/{companyID}/analysis", analysisHandler.StartAnalysis)
 
 	server := &http.Server{
 		Addr:              ":8080",

@@ -1,18 +1,23 @@
 import styled from "styled-components";
+import { BREAKPOINTS } from "@/shared/lib/breakpoints";
 
 const Layout = styled.div`
-  width: 100vw;
-  height: 100vh;
-  display: grid;
-
-  grid-template-columns: 1fr 3fr 1fr;
-  grid-template-rows: 1fr 12fr;
-
-  row-gap: 16px;
-
-  grid-template-areas: 
-  "header header header"
-  "aside1 main aside2";
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: ${({ theme }) => theme.colors.secondary.sectionBg};
 `
 
-export { Layout };
+const Container = styled.div`
+  width: 100%;
+  max-width: 1232px;
+  margin: 0 auto;
+  padding: 0 32px;
+  box-sizing: border-box;
+
+  @media ${BREAKPOINTS.phone} {
+    padding: 0 16px;
+  }
+`
+
+export { Layout, Container };

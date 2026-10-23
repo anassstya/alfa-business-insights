@@ -49,6 +49,10 @@ const BaseButton = styled.button<StyledButtonProps>`
     ` : css`
       background-color: ${theme.colors.primary.secondary};
       color: ${theme.colors.primary.text};
+
+      &:hover {
+        background-color: ${theme.colors.secondary.border};
+      }
     `;
 
     const borderStyles = borderVariants(borderSize)

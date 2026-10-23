@@ -104,3 +104,346 @@ paths:
                     synthetic_f: F_11036
                     first_name: Дмитрий
                     last_name: Сидоров
+
+  /api/v1/demo/users/{id}/companies:
+    get:
+      tags:
+        - Companies
+      summary: Получить компании пользователя
+      description: Возвращает список компаний выбранного демопользователя с их основными характеристиками.
+      operationId: getDemoUserCompanies
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID демопользователя
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+          example: 1
+
+      responses:
+        '200':
+          description: Список компаний успешно получен
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - companies
+                properties:
+                  companies:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                        - synthetic_u
+                      properties:
+                        id:
+                          type: integer
+                          format: int64
+                          description: Уникальный ID компании
+
+                        synthetic_u:
+                          type: string
+                          description: Синтетический идентификатор компании
+
+                        city:
+                          type: string
+                          nullable: true
+                          description: Город
+
+                        region:
+                          type: string
+                          nullable: true
+                          description: Регион
+
+                        revenue_company:
+                          type: number
+                          nullable: true
+                          description: Годовая выручка компании
+
+                        mainokved_name:
+                          type: string
+                          nullable: true
+                          description: Наименование основного вида экономической деятельности
+
+                        mainokved_code:
+                          type: string
+                          nullable: true
+                          description: Код основного вида экономической деятельности
+
+                        org_type:
+                          type: string
+                          nullable: true
+                          description: Тип организации
+
+                        okfs_name:
+                          type: string
+                          nullable: true
+                          description: Форма собственности
+
+                        company_age_years_gradation:
+                          type: string
+                          nullable: true
+                          description: Возраст компании (категория)
+
+                        eco_mark_label:
+                          type: string
+                          nullable: true
+                          description: Экологическая маркировка компании
+
+                        amount_workers_fns_gradation:
+                          type: string
+                          nullable: true
+                          description: Категория численности сотрудников по данным ФНС
+
+                        cl_type:
+                          type: string
+                          nullable: true
+                          description: Тип клиента по классификации датасета
+
+
+              example:
+                companies:
+                  - id: 123
+                    synthetic_u: U_12345
+                    city: Краснодар
+                    region: Краснодарский край
+                    revenue_company: 150000000
+                    mainokved_name: Аренда и управление недвижимым имуществом
+                    mainokved_code: "68.20"
+                    org_type: ООО
+                    okfs_name: Частная собственность
+
+        '400':
+          description: Некорректный ID пользователя
+
+        '404':
+          description: Пользователь не найден
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/companies:
+    get:
+      tags:
+        - Companies
+      summary: Получить список всех компаний (только активных)
+      description: Возвращает компании из базы данных с пагинацией
+      operationId: getCompanies
+
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Максимальное количество компаний в ответе
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+
+        - name: offset
+          in: query
+          required: false
+          description: Количество пропускаемых компаний
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+
+      responses:
+        '200':
+          description: Список компаний успешно получен
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - companies
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  companies:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                        - synthetic_u
+                      properties:
+                        id:
+                          type: integer
+                          format: int64
+
+                        synthetic_u:
+                          type: string
+
+                        city:
+                          type: string
+                          nullable: true
+
+                        region:
+                          type: string
+                          nullable: true
+
+                        revenue_company:
+                          type: number
+                          nullable: true
+
+                        mainokved_name:
+                          type: string
+                          nullable: true
+
+                        mainokved_code:
+                          type: string
+                          nullable: true
+
+                        org_type:
+                          type: string
+                          nullable: true
+
+                        okfs_name:
+                          type: string
+                          nullable: true
+
+                        company_age_years_gradation:
+                          type: string
+                          nullable: true
+
+                        eco_mark_label:
+                          type: string
+                          nullable: true
+
+                        amount_workers_fns_gradation:
+                          type: string
+                          nullable: true
+
+                        cl_type:
+                          type: string
+                          nullable: true
+
+                  total:
+                    type: integer
+                    format: int64
+                    description: Общее количество компаний в базе данных
+
+                  limit:
+                    type: integer
+                    description: Размер страницы
+
+                  offset:
+                    type: integer
+                    description: Смещение от начала списка
+
+              example:
+                companies:
+                  - id: 123
+                    synthetic_u: U_12345
+                    city: Краснодар
+                    region: Краснодарский край
+                    revenue_company: 150000000
+                    mainokved_name: Аренда недвижимого имущества
+                    mainokved_code: "68.20"
+                    org_type: ООО
+                    okfs_name: Частная собственность
+                    company_age_years_gradation: "5-10 лет"
+                    eco_mark_label: null
+                    amount_workers_fns_gradation: "10-50"
+                    cl_type: null
+                total: 85525
+                limit: 20
+                offset: 0
+
+        '400':
+          description: Некорректные параметры пагинации
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/companies/{companyID}/analysis:
+    post:
+      tags:
+        - Companies
+      summary: Запустить анализ компании
+      description: >
+        Запускает асинхронное формирование бизнес-инсайтов
+        для выбранной компании с учетом роли демопользователя.
+        
+        После проверки задача передается ML-агенту.
+        Ответ содержит идентификатор задачи для отслеживания
+        ее выполнения через SSE.
+
+      parameters:
+        - name: companyID
+          in: path
+          required: true
+          description: Уникальный числовой ID компании из таблицы companies
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+
+      requestBody:
+        required: true
+        description: Данные для запуска анализа компании
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - demo_user_id
+                - role
+              properties:
+                demo_user_id:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                  description: ID выбранного демопользователя
+
+                role:
+                  type: string
+                  description: Роль пользователя, для которой формируется аналитика
+                  enum:
+                    - owner
+                    - accountant
+                    - ceo
+                    - treasurer
+                    - cfo
+                    - other_c_level
+                    - decision_maker
+
+      responses:
+        '202':
+          description: Задача анализа создана и поставлена в обработку
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job_id
+                properties:
+                  job_id:
+                    type: string
+                    format: uuid
+                    description: Уникальный идентификатор задачи анализа
+
+        '400':
+          description: Некорректный ID пользователя, компании или роль
+
+        '404':
+          description: >
+            Компания или демопользователь не найдены,
+            либо компания не связана с пользователем,
+            либо компания не является действующим клиентом
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+        '503':
+          description: Не удалось передать задачу на обработку
