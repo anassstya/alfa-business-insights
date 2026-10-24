@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
+	"unicode/utf8"
 
 	"alfa-business-insights/backend/model"
 	"alfa-business-insights/backend/repo"
@@ -23,11 +25,15 @@ func NewAnalysisService(r *repo.AnalysisRepository) *AnalysisService {
 }
 
 func (s *AnalysisService) PrepareAnalysis(ctx context.Context, companyID int64, req model.StartAnalysisRequest) (string, error) {
-	if companyID <= 0 || req.Role == "" {
+	if companyID <= 0 || strings.TrimSpace(req.Role) == "" {
 		return "", ErrInvalidInput
 	}
 
 	if req.DemoUserID != nil && *req.DemoUserID <= 0 {
+		return "", ErrInvalidInput
+	}
+
+	if req.Goal != nil && utf8.RuneCountInString(*req.Goal) > 1000 {
 		return "", ErrInvalidInput
 	}
 
@@ -40,7 +46,11 @@ func (s *AnalysisService) PrepareAnalysis(ctx context.Context, companyID int64, 
 		return "", ErrInvalidRole
 	}
 
-	syntheticU, found, err := s.repo.GetCompanySyntheticU(ctx, companyID, req.DemoUserID)
+	syntheticU, found, err := s.repo.GetCompanySyntheticU(
+		ctx,
+		companyID,
+		req.DemoUserID,
+	)
 	if err != nil {
 		return "", err
 	}
