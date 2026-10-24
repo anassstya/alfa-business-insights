@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"alfa-business-insights/backend/model"
 	"context"
 	"errors"
 
@@ -60,4 +61,67 @@ func (r *AnalysisRepository) RoleExists(ctx context.Context, role string) (bool,
 	`, role).Scan(&exists)
 
 	return exists, err
+}
+
+func (r *AnalysisRepository) Create(ctx context.Context, job model.AnalysisJob) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO analysis_jobs (
+			id,
+			company_id,
+			demo_user_id,
+			role,
+			status
+		)
+		VALUES ($1::uuid, $2, $3, $4, 'pending')
+	`,
+		job.ID,
+		job.CompanyID,
+		job.DemoUserID,
+		job.Role,
+	)
+
+	return err
+}
+
+func (r *AnalysisRepository) GetByID(ctx context.Context, jobID string) (*model.AnalysisJob, error) {
+	var job model.AnalysisJob
+
+	err := r.db.QueryRow(ctx, `
+		SELECT
+			id::text,
+			company_id,
+			demo_user_id,
+			role,
+			goal,
+			status,
+			stage,
+			result,
+			error_message,
+			created_at,
+			updated_at
+		FROM analysis_jobs
+		WHERE id = $1::uuid
+	`, jobID).Scan(
+		&job.ID,
+		&job.CompanyID,
+		&job.DemoUserID,
+		&job.Role,
+		&job.Goal,
+		&job.Status,
+		&job.Stage,
+		&job.Result,
+		&job.ErrorMessage,
+		&job.CreatedAt,
+		&job.UpdatedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &job, nil
 }

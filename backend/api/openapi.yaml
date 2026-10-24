@@ -511,6 +511,12 @@ paths:
                   minimum: 1
                   description: Необязательный ID выбранного демопользователя
 
+                goal:
+                  type: string
+                  maxLength: 1000
+                  description: Необязательная цель анализа, указанная пользователем
+                  example: Оценить влияние ключевой ставки на бизнес
+                  
                 role:
                   type: string
                   description: Роль пользователя, для которой формируется аналитика
