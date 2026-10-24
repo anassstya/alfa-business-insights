@@ -43,5 +43,16 @@ const COMPANIES_MAX_LIMIT = 100;
 /** Размер страницы при ленивой подгрузке компаний (не больше COMPANIES_MAX_LIMIT) */
 const COMPANIES_PAGE_SIZE = 50;
 
+interface CompanyAnalyticsBody {
+  demo_user_id: number,
+  role: string
+}
+
+/** Ответ 202 POST /api/v1/companies/{companyID}/analysis */
+interface CompanyAnalyticsResponse {
+  /** uuid задачи — по нему подписываемся на SSE /api/v1/analysis/jobs/{jobID}/events */
+  job_id: string;
+}
+
 export { COMPANIES_MAX_LIMIT, COMPANIES_PAGE_SIZE };
-export type { Company, CompaniesParams, CompaniesResponse, UserCompaniesResponse };
+export type { Company, CompaniesParams, CompaniesResponse, UserCompaniesResponse, CompanyAnalyticsResponse, CompanyAnalyticsBody };

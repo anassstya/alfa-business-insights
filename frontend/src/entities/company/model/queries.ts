@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
-import { getCompanies, getCompaniesByUserId } from "../api/companyApi";
+import { getCompanies, getCompaniesByUserId, getCompanyAnalysis } from "../api/companyApi";
 import { COMPANIES_PAGE_SIZE, type CompaniesResponse, type Company } from "./types";
 
 const companyKeys = {
@@ -85,4 +85,22 @@ const useCompany = (id: number | null) => {
   })
 }
 
-export { companyKeys, useInfiniteCompanies, useCompany, useUserCompanies };
+/**
+ * POST /api/v1/companies/{companyID}/analysis через useQuery: каждый вызов создаёт задачу на backend,
+ * поэтому запрос выполняется один раз на набор параметров и никогда не повторяется сам —
+ * ни при фокусе окна, ни при переподключении сети, ни при повторном монтировании, ни при ошибке.
+ * Новая задача — только при смене companyId / role / demoUserId или через refetch().
+ */
+const useCompanyAnalysis = ({ companyId, role, demoUserId }: {companyId?: number, role?: string, demoUserId?: number}) => useQuery({
+  queryKey: ['job', role, demoUserId, companyId],
+  queryFn: () => getCompanyAnalysis(companyId!, { role: role!, demo_user_id: demoUserId!}),
+  enabled: !!companyId && !!role && !!demoUserId,
+  staleTime: 1000 * 60 * 60,
+  gcTime: Infinity,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+  refetchOnMount: false,
+  retry: false,
+})
+
+export { companyKeys, useInfiniteCompanies, useCompany, useUserCompanies, useCompanyAnalysis };

@@ -1,5 +1,5 @@
 import { apiClient } from "@/shared";
-import type { CompaniesParams, CompaniesResponse, UserCompaniesResponse } from "../model/types";
+import type { CompaniesParams, CompaniesResponse, CompanyAnalyticsBody, CompanyAnalyticsResponse, UserCompaniesResponse } from "../model/types";
 
 /** GET /api/v1/companies */
 const getCompanies = async (params: CompaniesParams = {}, signal?: AbortSignal) => {
@@ -8,9 +8,6 @@ const getCompanies = async (params: CompaniesParams = {}, signal?: AbortSignal) 
   return data;
 }
 
-// FIXME(openapi): GET /api/v1/companies/{id} убран из спецификации и не реализован на backend —
-// getCompanyById удалён, карточка компании берёт данные из уже загруженных списков (см. useCompany).
-
 /** GET /api/v1/demo/users/{id}/companies */
 const getCompaniesByUserId = async (id: number, signal?: AbortSignal) => {
   const { data } = await apiClient.get<UserCompaniesResponse>(`/api/v1/demo/users/${id}/companies`, { signal });
@@ -18,4 +15,11 @@ const getCompaniesByUserId = async (id: number, signal?: AbortSignal) => {
   return data.companies;
 }
 
-export { getCompanies, getCompaniesByUserId };
+/** POST /api/v1/companies/{companyID}/analysis → 202 { job_id } */
+const getCompanyAnalysis = async (companyId: number, body: CompanyAnalyticsBody) => {
+  const { data } = await apiClient.post<CompanyAnalyticsResponse>(`/api/v1/companies/${companyId}/analysis`, body);
+
+  return data.job_id
+}
+
+export { getCompanies, getCompaniesByUserId, getCompanyAnalysis };
