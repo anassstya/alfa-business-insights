@@ -1,8 +1,8 @@
-import { NewsCard, NewsCardSkeleton, useNewsInfinite, useSession, type NewsItem } from "@/entities"
-import { useMemo, type ReactNode } from "react"
+import { NewsCard, NewsCardSkeleton, useCompanyAnalysis, useSession, type NewsItem } from "@/entities"
+import { type ReactNode } from "react"
 import { Button, Card, formatDayLabel, Title, toIsoDate } from "@/shared"
 import { DayGroup, DayLabel, LoadMore, StateIcon, StateMessage, StateText, Summary } from "./NewsFeed.styled"
-import { DEFAULT_DATE_FILTER, toNewsFilters, type DateFilterValue } from "@/features";
+import { useAnalysis } from "@/entities/job";
 
 const pluralRules = new Intl.PluralRules('ru-RU');
 const NEWS_WORDS: Record<string, string> = { one: 'новость', few: 'новости', many: 'новостей', other: 'новости' };
@@ -29,51 +29,32 @@ const FeedState = ({ icon, title, text, action }: { icon: string, title: string,
   </Card>
 )
 
-interface Props {
-  dateFilter: DateFilterValue
-  setDateFilter(dateFilter: DateFilterValue): void
-}
+const Content = () => {
+  const { companyId, role, userId } = useSession();
 
-const Content = ({ dateFilter, setDateFilter }: Props) => {
-  const { companyId, role } = useSession();
-  const params = useMemo(
-    () => companyId === null || role === null ? null : { company_id: companyId, role, ...toNewsFilters(dateFilter) },
-    [companyId, role, dateFilter],
-  );
-
-  const { data, isPending, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useNewsInfinite(params);
-  if (companyId === null) {
+  const { data: jobId, isPending, isError, refetch } = useCompanyAnalysis({ companyId: companyId ?? undefined, role: role ?? undefined, demoUserId: userId});
+  const { isError: isAnalysisError, isFail, isConnect } = useAnalysis(jobId)
+  if (companyId === null || role === null) {
       return (
         <FeedState
           icon="🏢"
-          title="Выберите организацию"
+          title="Выберите организацию и роль"
           text="Подберём новости по отрасли и региону вашей компании с учётом вашей роли."
         />
       )
     }
 
-    if (isPending) {
+    if (isPending || isConnect) {
       return Array.from({ length: 3 }, (_, i) => <NewsCardSkeleton key={i} />);
     }
 
-    if (isError) {
+    if (isError || isAnalysisError || isFail) {
       return (
         <FeedState
           icon="⚠️"
           title="Не удалось загрузить новости"
           text="Проверьте соединение и попробуйте ещё раз."
           action={<Button variant="secondary" borderSize="S" onClick={() => refetch()}>Повторить</Button>}
-        />
-      )
-    }
-
-    if (data.items.length === 0) {
-      return (
-        <FeedState
-          icon="🗞️"
-          title="Новостей не найдено"
-          text="За выбранный период ничего нет — попробуйте расширить диапазон дат."
-          action={<Button variant="secondary" borderSize="S" onClick={() => setDateFilter(DEFAULT_DATE_FILTER)}>Показать за всё время</Button>}
         />
       )
     }
