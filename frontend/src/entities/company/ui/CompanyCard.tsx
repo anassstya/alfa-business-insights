@@ -1,10 +1,11 @@
 import { Badge, Card, Flex, Skeleton, Text, Title } from "@/shared";
 import { useCompany } from "../model/queries";
 import { Eyebrow, Fact, FactList } from "./CompanyCard.styled";
+import { getCompanyLabel } from "../lib/companyLabel";
 
 const revenueFormatter = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 });
 
-const formatRevenue = (value?: number) => typeof value === 'number' ? `${revenueFormatter.format(value)} ₽` : '—';
+const formatRevenue = (value: number | null) => typeof value === 'number' ? `${revenueFormatter.format(value)} ₽` : '—';
 
 const CompanyCardSkeleton = () => (
   <Card>
@@ -33,17 +34,18 @@ const CompanyCard = ({ companyId }: { companyId: number }) => {
     <Card as="section" aria-label="Профиль организации">
       <Flex direction="column" gap="8px" align="flex-start">
         <Eyebrow>Профиль организации</Eyebrow>
-        <Title.H4>{company.synthetic_u}</Title.H4>
+        <Title.H4>{getCompanyLabel(company)}</Title.H4>
         <Flex gap="6px" style={{ flexWrap: 'wrap' }}>
           {company.org_type && <Badge>{company.org_type}</Badge>}
-          {company.cl_type && <Badge $variant="accent">{company.cl_type}</Badge>}
+          {/* FIXME(openapi): cl_type — код датасета (на backend всегда 'CLIENT'), человекочитаемого значения в спецификации нет */}
+          {company.cl_type && <Badge $variant="accent">{company.okfs_name}</Badge>}
         </Flex>
       </Flex>
 
       <FactList>
         <Fact>
           <dt>Отрасль</dt>
-          <dd>{company.industry_name}{company.industry_code ? ` · ОКВЭД ${company.industry_code}` : ''}</dd>
+          <dd>{company.mainokved_name ?? '—'}{company.mainokved_code ? ` · ОКВЭД ${company.mainokved_code}` : ''}</dd>
         </Fact>
         <Fact>
           <dt>Город</dt>

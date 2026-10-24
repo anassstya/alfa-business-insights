@@ -3,7 +3,7 @@ import { getUsers } from "../api";
 
 const useDemoUsers = () => useQuery({
   queryKey: ['demoUsers'],
-  queryFn: getUsers
+  queryFn: ({ signal }) => getUsers(signal)
 })
 
 export { useDemoUsers }

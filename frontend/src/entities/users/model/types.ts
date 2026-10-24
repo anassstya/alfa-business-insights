@@ -1,3 +1,4 @@
+/** Элемент `users[]` в ответе GET /api/v1/demo/users */
 interface DemoUser {
   id: number,
   synthetic_f: string,
@@ -5,4 +6,9 @@ interface DemoUser {
   last_name: string
 }
 
-export type { DemoUser }
+/** Ответ GET /api/v1/demo/users */
+interface DemoUsersResponse {
+  users: DemoUser[]
+}
+
+export type { DemoUser, DemoUsersResponse }

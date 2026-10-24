@@ -1,22 +1,20 @@
 /**
- * Роли пользователя внутри организации.
- * В API пока нет справочника ролей — список зашит на фронте,
- * значение уходит в запрос новостей параметром `role`.
+ * Код роли из GET /api/v1/roles (`roles[].code`).
+ * FIXME(openapi): в спецификации это просто string без enum — набор ролей задаёт БД
+ * (owner, accountant, ceo, treasurer, cfo, other_c_level, decision_maker), поэтому фронт
+ * не может проверить код на этапе типизации.
  */
-const ROLES = [
-  { value: 'owner', label: 'Собственник' },
-  { value: 'ceo', label: 'Генеральный директор' },
-  { value: 'cfo', label: 'Финансовый директор' },
-  { value: 'accountant', label: 'Бухгалтер' },
-  { value: 'lawyer', label: 'Юрист' },
-] as const;
+type RoleId = string;
 
-type RoleId = typeof ROLES[number]['value'];
+/** Элемент `roles[]` в ответе GET /api/v1/roles */
+interface Role {
+  code: RoleId;
+  full_name: string;
+}
 
-const DEFAULT_ROLE: RoleId = 'owner';
+/** Ответ GET /api/v1/roles */
+interface RolesResponse {
+  roles: Role[];
+}
 
-const isRoleId = (value: unknown): value is RoleId => ROLES.some(role => role.value === value);
-
-const getRoleLabel = (role: RoleId | null) => ROLES.find(r => r.value === role)?.label ?? role;
-
-export { ROLES, DEFAULT_ROLE, isRoleId, getRoleLabel, type RoleId };
+export type { RoleId, Role, RolesResponse };
