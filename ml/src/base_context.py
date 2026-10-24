@@ -1,4 +1,7 @@
-"""Build database-backed company contexts. Run: python ml/src/base_context.py"""
+"""Build company contexts and upsert them to Supabase.
+
+Run: python ml/src/base_context.py --no-json
+"""
 
 from __future__ import annotations
 
@@ -6,33 +9,186 @@ import argparse
 import json
 import math
 import os
+import time
 from bisect import bisect_right
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
+import psycopg
 from dotenv import load_dotenv
 from sqlalchemy import URL, create_engine, text
+from sqlalchemy.exc import OperationalError as SqlAlchemyOperationalError
+from sqlalchemy.pool import NullPool
 
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "database/data/company_context.json"
 MIN_GROUP_REVENUE = 15_000_000_000
 TABLES = {"companies": "companies", "people": "person_company_links", "payments": "payments"}
+BUILD_BATCH_SIZE = 10
+DIRECT_PAYLOAD_BYTES = 18_000
+STAGE_CHUNK_BYTES = 14_000
+UPLOAD_WORKERS = 2
+STAGE_KEY = "__base_context_upload_chunks__"
 
 
-def get_engine():
+UPSERT_SQL = """
+        INSERT INTO public.company_contexts (company_id, payload)
+        VALUES (%s, CAST(%s AS jsonb))
+        ON CONFLICT (company_id) DO UPDATE
+        SET payload = EXCLUDED.payload,
+            updated_at = now()
+    """
+START_STAGING_SQL = f"""
+        INSERT INTO public.company_contexts (company_id, payload)
+        VALUES (%s, jsonb_build_object('company_id', CAST(%s AS text), '{STAGE_KEY}',
+                                       jsonb_build_object('0', CAST(%s AS text))))
+        ON CONFLICT (company_id) DO UPDATE
+        SET payload = jsonb_set(public.company_contexts.payload, '{{{STAGE_KEY}}}',
+                                EXCLUDED.payload -> '{STAGE_KEY}', true)
+    """
+APPEND_CHUNK_SQL = f"""
+        UPDATE public.company_contexts
+        SET payload = jsonb_set(payload, '{{{STAGE_KEY}}}',
+                                (payload -> '{STAGE_KEY}') ||
+                                jsonb_build_object(CAST(%s AS text), CAST(%s AS text)), true)
+        WHERE company_id = %s AND payload ? '{STAGE_KEY}'
+    """
+FINISH_STAGING_SQL = f"""
+        UPDATE public.company_contexts AS target
+        SET payload = (
+            SELECT string_agg(value #>> '{{}}', '' ORDER BY key::integer)::jsonb
+            FROM jsonb_each(target.payload -> '{STAGE_KEY}')
+        ), updated_at = now()
+        WHERE company_id = %s AND payload ? '{STAGE_KEY}'
+    """
+
+
+def _db_settings():
     load_dotenv(ROOT / ".env", override=False)
     required = ("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB")
     missing = [key for key in required if not os.getenv(key)]
     if missing:
         raise RuntimeError("Missing database settings: " + ", ".join(missing))
-    url = URL.create("postgresql+psycopg", username=os.environ["POSTGRES_USER"],
-                     password=os.environ["POSTGRES_PASSWORD"],
-                     host=os.getenv("POSTGRES_HOST", "localhost"),
-                     port=int(os.getenv("POSTGRES_PORT", "15432")),
-                     database=os.environ["POSTGRES_DB"])
-    return create_engine(url, connect_args={"connect_timeout": 5})
+    return {"user": os.environ["POSTGRES_USER"], "password": os.environ["POSTGRES_PASSWORD"],
+            "dbname": os.environ["POSTGRES_DB"], "host": os.getenv("POSTGRES_HOST", "localhost"),
+            "port": int(os.getenv("POSTGRES_PORT", "15432"))}
+
+
+def _writer_settings():
+    settings = _db_settings()
+    if settings["host"].endswith(".pooler.supabase.com"):
+        settings["port"] = int(os.getenv("POSTGRES_UPLOAD_PORT", "6543"))
+    settings.update(connect_timeout=5, autocommit=True,
+                    sslmode=os.getenv("POSTGRES_SSLMODE", "require" if settings["host"].endswith("supabase.com") else "prefer"),
+                    gssencmode="disable")
+    return settings
+
+
+def _retry_delay(exc, attempt):
+    if "ECIRCUITBREAKER" in str(exc):
+        print("Supavisor circuit breaker is active; waiting 125 seconds", flush=True)
+        time.sleep(125)
+    else:
+        time.sleep(0.5 * (2 ** min(attempt, 4)))
+
+
+def _open_writer(settings):
+    for attempt in range(5):
+        try:
+            return psycopg.connect(**settings)
+        except psycopg.OperationalError as exc:
+            if attempt == 4:
+                raise
+            _retry_delay(exc, attempt)
+
+
+def _write_once(settings, statement, params):
+    """Send one statement through a fresh connection and retry lost connections."""
+    for attempt in range(3):
+        connection = None
+        try:
+            connection = _open_writer(settings)
+            with connection.cursor() as cursor:
+                cursor.execute(statement, params)
+                if cursor.rowcount != 1:
+                    raise RuntimeError("Context upload affected no rows")
+            return
+        except (psycopg.OperationalError, OSError) as exc:
+            if attempt == 2:
+                raise
+            _retry_delay(exc, attempt)
+        finally:
+            if connection is not None:
+                try:
+                    connection.close()
+                except OSError:
+                    pass
+
+
+def _utf8_chunks(value, max_bytes):
+    raw = value.encode("utf-8")
+    start = 0
+    while start < len(raw):
+        end = min(start + max_bytes, len(raw))
+        while True:
+            try:
+                chunk = raw[start:end].decode("utf-8")
+                break
+            except UnicodeDecodeError:
+                end -= 1
+        yield chunk
+        start = end
+
+
+def _upload_context(context, settings):
+    company_id = context["company_id"]
+    payload = json.dumps(context, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    try:
+        if len(payload.encode("utf-8")) <= DIRECT_PAYLOAD_BYTES:
+            _write_once(settings, UPSERT_SQL, (company_id, payload))
+            return
+        chunks = iter(_utf8_chunks(payload, STAGE_CHUNK_BYTES))
+        _write_once(settings, START_STAGING_SQL, (company_id, company_id, next(chunks)))
+        for index, chunk in enumerate(chunks, start=1):
+            _write_once(settings, APPEND_CHUNK_SQL, (str(index), chunk, company_id))
+        _write_once(settings, FINISH_STAGING_SQL, (company_id,))
+    except Exception as exc:
+        raise RuntimeError(f"Failed to upload context for {company_id}") from exc
+
+
+def _uploaded_ids(ids, settings):
+    uploaded = set()
+    for start in range(0, len(ids), 1000):
+        connection = _open_writer(settings)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"SELECT company_id FROM public.company_contexts WHERE company_id = ANY(%s) "
+                    f"AND payload ? 'base_information' AND NOT payload ? '{STAGE_KEY}'",
+                    (ids[start:start + 1000],),
+                )
+                uploaded.update(row[0] for row in cursor)
+        finally:
+            try:
+                connection.close()
+            except OSError:
+                pass
+    return uploaded
+
+
+def get_engine():
+    settings = _db_settings()
+    port = (int(os.getenv("POSTGRES_READ_PORT", "6543"))
+            if settings["host"].endswith(".pooler.supabase.com") else settings["port"])
+    url = URL.create("postgresql+psycopg", username=settings["user"],
+                     password=settings["password"], host=settings["host"],
+                     port=port, database=settings["dbname"])
+    return create_engine(url, connect_args={"connect_timeout": 5},
+                         poolclass=NullPool, isolation_level="AUTOCOMMIT",
+                         skip_autocommit_rollback=True)
 
 
 def read_table(connection, name):
@@ -64,6 +220,39 @@ def read_relevant_payments(connection, ids):
         return pd.DataFrame(columns=["payer", "beneficiary", "pay_amt", "pay_cnt"])
     return pd.read_sql_query(text("""SELECT payer, beneficiary, pay_amt, pay_cnt FROM payments
         WHERE payer = ANY(:ids) OR beneficiary = ANY(:ids)"""), connection, params={"ids": ids})
+
+
+def read_payments_with_retry(engine, ids):
+    for attempt in range(5):
+        try:
+            with engine.connect() as connection:
+                return read_relevant_payments(connection, ids)
+        except Exception as exc:
+            cause = exc
+            while cause is not None and not isinstance(cause, (psycopg.OperationalError, SqlAlchemyOperationalError)):
+                cause = cause.__cause__
+            if cause is None or attempt == 4:
+                raise
+            print(f"Payment read connection lost; retrying batch ({attempt + 1}/4)", flush=True)
+            _retry_delay(exc, attempt)
+
+
+def read_initial_data(engine, min_group_revenue):
+    for attempt in range(5):
+        try:
+            with engine.connect() as connection:
+                ids = select_company_ids(connection, min_group_revenue)
+                companies = read_table(connection, "companies")
+                people = read_table(connection, "people")
+                return ids, companies, people
+        except Exception as exc:
+            cause = exc
+            while cause is not None and not isinstance(cause, (psycopg.OperationalError, SqlAlchemyOperationalError)):
+                cause = cause.__cause__
+            if cause is None or attempt == 4:
+                raise
+            print(f"Initial database read interrupted; retrying ({attempt + 1}/4)", flush=True)
+            _retry_delay(exc, attempt)
 
 
 def clean(value):
@@ -296,35 +485,71 @@ class ContextBuilder:
             }}, "web_research": {}, "alfa_analytics": {}}
 
 
-def build_all(output=OUTPUT, min_group_revenue=MIN_GROUP_REVENUE):
+def build_all(output=OUTPUT, min_group_revenue=MIN_GROUP_REVENUE, upload_to_db=True, resume=False):
     engine = get_engine()
+    writer_settings = _writer_settings() if upload_to_db else None
+    temporary = None
     try:
-        with engine.connect() as connection:
-            ids = select_company_ids(connection, min_group_revenue)
-            print(f"Selected {len(ids)} companies", flush=True)
-            companies = read_table(connection, "companies")
-            people = read_table(connection, "people")
-            builder = ContextBuilder(companies, people, ids)
-            del companies, people
-            output = Path(output)
-            output.parent.mkdir(parents=True, exist_ok=True)
-            temporary = output.with_suffix(output.suffix + ".tmp")
-            try:
-                with temporary.open("w", encoding="utf-8") as stream:
-                    stream.write("[\n")
-                    for start in range(0, len(ids), 100):
-                        batch = ids[start:start + 100]
-                        builder.load_payments(read_relevant_payments(connection, batch))
-                        for index, company_id in enumerate(batch, start):
-                            if index:
+        ids, companies, people = read_initial_data(engine, min_group_revenue)
+        print(f"Selected {len(ids)} companies", flush=True)
+        uploaded_ids = _uploaded_ids(ids, writer_settings) if resume else set()
+        pending_ids = [company_id for company_id in ids if company_id not in uploaded_ids]
+        if resume:
+            print(f"Resuming: {len(uploaded_ids)} contexts already present; {len(pending_ids)} remaining", flush=True)
+        builder = ContextBuilder(companies, people, ids)
+        del companies, people
+
+        output_path = Path(output) if output is not None else None
+        if output_path is not None:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = output_path.with_suffix(output_path.suffix + ".tmp")
+            stream = temporary.open("w", encoding="utf-8")
+        else:
+            stream = None
+        try:
+            if stream:
+                stream.write("[\n")
+            count = len(uploaded_ids)
+            with ThreadPoolExecutor(max_workers=UPLOAD_WORKERS) as uploader:
+                for start in range(0, len(pending_ids), BUILD_BATCH_SIZE):
+                    batch_ids = pending_ids[start:start + BUILD_BATCH_SIZE]
+                    payments = read_payments_with_retry(engine, batch_ids)
+                    builder.load_payments(payments)
+                    contexts = [builder.build(company_id) for company_id in batch_ids]
+                    if stream:
+                        for context in contexts:
+                            if count:
                                 stream.write(",\n")
-                            json.dump(builder.build(company_id), stream, ensure_ascii=False, allow_nan=False)
-                        if (start + len(batch)) % 1000 == 0:
-                            print(f"Built {start + len(batch)}/{len(ids)} companies", flush=True)
-                    stream.write("\n]\n")
-                temporary.replace(output)
-            finally:
-                temporary.unlink(missing_ok=True)
+                            json.dump(context, stream, ensure_ascii=False, allow_nan=False)
+                            count += 1
+                    else:
+                        count += len(contexts)
+                    if upload_to_db:
+                        futures = [uploader.submit(_upload_context, context, writer_settings)
+                                   for context in contexts]
+                        for future in as_completed(futures):
+                            future.result()
+                    if count and ((count - len(uploaded_ids)) % 100 == 0 or count == len(ids)):
+                        action = "uploaded" if upload_to_db else "built"
+                        print(f"Built and {action} {count}/{len(ids)} companies", flush=True)
+            if stream:
+                stream.write("\n]\n")
+                stream.close()
+                stream = None
+            if upload_to_db:
+                db_count = len(_uploaded_ids(ids, writer_settings))
+                print(f"Verified {db_count}/{count} generated contexts in company_contexts.", flush=True)
+                if db_count != len(ids):
+                    raise RuntimeError(f"Only {db_count}/{len(ids)} contexts are complete in company_contexts")
+        finally:
+            if stream:
+                stream.close()
+        if temporary is not None:
+            temporary.replace(output_path)
+    except Exception:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
+        raise
     finally:
         engine.dispose()
     return len(ids)
@@ -337,10 +562,25 @@ def main():
     parser.add_argument("--no-group-revenue-limit", action="store_true",
                         help="Build contexts for every eligible client regardless of group revenue")
     parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument("--upload-to-db", dest="upload_to_db", action="store_true",
+                        help="Upsert generated contexts into public.company_contexts (default)")
+    parser.add_argument("--no-upload-to-db", dest="upload_to_db", action="store_false",
+                        help="Build the local JSON file without writing to the database")
+    parser.set_defaults(upload_to_db=True)
+    parser.add_argument("--no-json", action="store_true",
+                        help="Do not write a local JSON file (use with --upload-to-db)")
+    parser.add_argument("--resume", action="store_true",
+                        help="Skip complete contexts already in company_contexts (requires --no-json)")
     args = parser.parse_args()
+    if args.no_json and not args.upload_to_db:
+        parser.error("--no-json requires --upload-to-db")
+    if args.resume and (not args.no_json or not args.upload_to_db):
+        parser.error("--resume requires --no-json and database upload")
     threshold = None if args.no_group_revenue_limit else args.min_group_revenue
-    count = build_all(args.output, threshold)
-    print(f"Wrote {count} contexts to {args.output}")
+    output = None if args.no_json else args.output
+    count = build_all(output, threshold, args.upload_to_db, args.resume)
+    if output is not None:
+        print(f"Wrote {count} contexts to {output}")
 
 
 if __name__ == "__main__":
