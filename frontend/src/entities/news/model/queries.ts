@@ -12,7 +12,7 @@ const newsKeys = {
 }
 
 const useNewsInfinite = (params: NewsQueryParams | null) => useInfiniteQuery({
-  queryKey: newsKeys.list(params ?? { company_id: 0, role: 'owner' }),
+  queryKey: newsKeys.list(params ?? { company_id: 0, role: '' }),
   queryFn: ({ pageParam, signal }) => getNews({ ...params!, limit: NEWS_PAGE_SIZE, offset: pageParam }, signal),
   initialPageParam: 0,
   getNextPageParam: (lastPage, pages) => {

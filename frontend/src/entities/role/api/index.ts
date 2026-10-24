@@ -1,7 +1,9 @@
 import { apiClient } from "@/shared"
+import type { RolesResponse } from "../model/roles"
 
-const getRole = async () => {
-  const { data } = await apiClient.get<{roles: Array<{code: string, full_name: string}>}>('/v1/roles')
+/** GET /api/v1/roles */
+const getRole = async (signal?: AbortSignal) => {
+  const { data } = await apiClient.get<RolesResponse>('/api/v1/roles', { signal })
 
   return data.roles
 }

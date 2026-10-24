@@ -3,7 +3,7 @@ import ChevronIcon from '../../icons/chevron-down.svg?react'
 import CheckIcon from '../../icons/check.svg?react'
 import {
   Caption, Chevron, Option, OptionDescription, OptionLabel, OptionText,
-  Popover, PopoverMessage, SelectRoot, Trigger, TriggerText, Value,
+  LoadMoreRow, Popover, PopoverMessage, SelectRoot, Trigger, TriggerText, Value,
 } from "./Select.styled";
 
 interface SelectOption<T extends string | number> {
@@ -23,6 +23,14 @@ interface SelectProps<T extends string | number> {
   disabled?: boolean;
   emptyText?: string;
   fullWidth?: boolean;
+  /** Подпись выбранного значения, если его опции ещё нет среди подгруженных */
+  selectedLabel?: string;
+  /** Ленивая подгрузка: есть ли ещё опции на сервере */
+  hasMore?: boolean;
+  /** Ленивая подгрузка: идёт загрузка следующей порции */
+  loadingMore?: boolean;
+  /** Вызывается, когда пользователь докрутил список до конца */
+  onLoadMore?(): void;
 }
 
 const Select = <T extends string | number>({
@@ -35,13 +43,20 @@ const Select = <T extends string | number>({
   disabled = false,
   emptyText = 'Нет вариантов',
   fullWidth = false,
+  selectedLabel,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }: SelectProps<T>) => {
   const [isOpen, setIsOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLUListElement>(null);
+  const loadMoreRef = useRef<HTMLLIElement>(null);
   const listId = useId();
 
   const selectedOption = options.find(option => option.value === value);
+  const triggerLabel = selectedOption?.label ?? (value !== null ? selectedLabel : undefined);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -55,6 +70,30 @@ const Select = <T extends string | number>({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen])
+
+  // Ленивая подгрузка: строка «Загрузка…» в конце списка попала в область видимости — просим следующую порцию.
+  // Observer пересоздаётся после каждой порции, чтобы догрузить ещё, если строка всё ещё видна.
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!isOpen || !hasMore || loadingMore || !target || !onLoadMore) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => entry.isIntersecting && onLoadMore(),
+      { root: popoverRef.current, rootMargin: '0px 0px 120px 0px' },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [isOpen, hasMore, loadingMore, onLoadMore, options.length])
+
+  // при навигации стрелками держим подсвеченную опцию в видимой области — это же докручивает до подгрузки
+  useEffect(() => {
+    if (!isOpen || highlighted < 0) return;
+
+    popoverRef.current
+      ?.querySelector(`[data-index="${highlighted}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [isOpen, highlighted])
 
   const open = () => {
     setHighlighted(Math.max(0, options.findIndex(option => option.value === value)));
@@ -112,19 +151,20 @@ const Select = <T extends string | number>({
         <TriggerText>
           {caption && <Caption>{caption}</Caption>}
           <Value $placeholder={!selectedOption}>
-            {selectedOption?.label ?? (loading ? 'Загрузка…' : placeholder)}
+            {triggerLabel ?? (loading ? 'Загрузка…' : placeholder)}
           </Value>
         </TriggerText>
         <Chevron $open={isOpen}><ChevronIcon /></Chevron>
       </Trigger>
 
       {isOpen && (
-        <Popover id={listId} role="listbox">
+        <Popover ref={popoverRef} id={listId} role="listbox" aria-busy={loading || loadingMore}>
           {loading && <PopoverMessage>Загрузка…</PopoverMessage>}
           {!loading && options.length === 0 && <PopoverMessage>{emptyText}</PopoverMessage>}
           {!loading && options.map((option, index) => (
             <Option
               key={option.value}
+              data-index={index}
               role="option"
               aria-selected={option.value === value}
               $active={option.value === value}
@@ -140,6 +180,9 @@ const Select = <T extends string | number>({
               <CheckIcon />
             </Option>
           ))}
+          {!loading && hasMore && (
+            <LoadMoreRow ref={loadMoreRef} aria-hidden>Загрузка…</LoadMoreRow>
+          )}
         </Popover>
       )}
     </SelectRoot>
