@@ -97,3 +97,38 @@ func (h *CompanyHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to encode companies: %v", err)
 	}
 }
+
+func (h *CompanyHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	companyID, err := strconv.ParseInt(r.PathValue("companyID"), 10, 64)
+	if err != nil || companyID <= 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "Некорректный ID компании",
+		})
+		return
+	}
+
+	company, err := h.repo.GetByID(r.Context(), companyID)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "Внутренняя ошибка сервера",
+		})
+		return
+	}
+
+	if company == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "Компания не найдена или недоступна",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(company)
+}

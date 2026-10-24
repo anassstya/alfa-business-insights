@@ -110,7 +110,7 @@ paths:
       tags:
         - Companies
       summary: Получить компании пользователя
-      description: Возвращает список компаний выбранного демопользователя с их основными характеристиками.
+      description: Возвращает компании выбранного демопользователя со статусом CLIENT и их основные характеристики.
       operationId: getDemoUserCompanies
 
       parameters:
@@ -203,8 +203,8 @@ paths:
 
                         cl_type:
                           type: string
-                          nullable: true
-                          description: Тип клиента по классификации датасета
+                          enum: [CLIENT]
+                          description: Статус компании — действующий клиент
 
 
               example:
@@ -218,6 +218,7 @@ paths:
                     mainokved_code: "68.20"
                     org_type: ООО
                     okfs_name: Частная собственность
+                    cl_type: CLIENT
 
         '400':
           description: Некорректный ID пользователя
@@ -232,8 +233,8 @@ paths:
     get:
       tags:
         - Companies
-      summary: Получить список всех компаний (только активных)
-      description: Возвращает компании из базы данных с пагинацией
+      summary: Получить список компаний со статусом CLIENT
+      description: Возвращает компании со статусом CLIENT с пагинацией.
       operationId: getCompanies
 
       parameters:
@@ -326,12 +327,12 @@ paths:
 
                         cl_type:
                           type: string
-                          nullable: true
+                          enum: [CLIENT]
 
                   total:
                     type: integer
                     format: int64
-                    description: Общее количество компаний в базе данных
+                    description: Общее количество компаний со статусом CLIENT
 
                   limit:
                     type: integer
@@ -355,13 +356,120 @@ paths:
                     company_age_years_gradation: "5-10 лет"
                     eco_mark_label: null
                     amount_workers_fns_gradation: "10-50"
-                    cl_type: null
-                total: 85525
+                    cl_type: CLIENT
+                total: 41968
                 limit: 20
                 offset: 0
 
         '400':
           description: Некорректные параметры пагинации
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/companies/{companyID}:
+    get:
+      tags:
+        - Companies
+      summary: Получить компанию по ID
+      description: >
+        Возвращает информацию о компании по ее числовому ID.
+        Доступны только компании со статусом CLIENT.
+      operationId: getCompanyByID
+
+      parameters:
+        - name: companyID
+          in: path
+          required: true
+          description: Числовой ID компании из таблицы companies
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+
+      responses:
+        '200':
+          description: Информация о компании
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - synthetic_u
+                  - cl_type
+                properties:
+                  id:
+                    type: integer
+                    format: int64
+
+                  synthetic_u:
+                    type: string
+
+                  city:
+                    type: string
+                    nullable: true
+
+                  region:
+                    type: string
+                    nullable: true
+
+                  revenue_company:
+                    type: number
+                    nullable: true
+
+                  mainokved_name:
+                    type: string
+                    nullable: true
+
+                  mainokved_code:
+                    type: string
+                    nullable: true
+
+                  org_type:
+                    type: string
+                    nullable: true
+
+                  okfs_name:
+                    type: string
+                    nullable: true
+
+                  company_age_years_gradation:
+                    type: string
+                    nullable: true
+
+                  eco_mark_label:
+                    type: string
+                    nullable: true
+
+                  amount_workers_fns_gradation:
+                    type: string
+                    nullable: true
+
+                  cl_type:
+                    type: string
+                    enum: [CLIENT]
+
+              example:
+                id: 123
+                synthetic_u: U_12345
+                city: Краснодар
+                region: Краснодарский край
+                revenue_company: 150000000
+                mainokved_name: Аренда недвижимого имущества
+                mainokved_code: "68.20"
+                org_type: ООО
+                okfs_name: Частная собственность
+                company_age_years_gradation: "5-10 лет"
+                eco_mark_label: null
+                amount_workers_fns_gradation: "10-50"
+                cl_type: CLIENT
+
+        '400':
+          description: Некорректный ID компании
+
+        '404':
+          description: Компания не найдена или недоступна
 
         '500':
           description: Внутренняя ошибка сервера
@@ -373,11 +481,9 @@ paths:
       summary: Запустить анализ компании
       description: >
         Запускает асинхронное формирование бизнес-инсайтов
-        для выбранной компании с учетом роли демопользователя.
-        
-        После проверки задача передается ML-агенту.
-        Ответ содержит идентификатор задачи для отслеживания
-        ее выполнения через SSE.
+        для выбранной компании с учетом указанной роли.
+        Если передан demo_user_id, дополнительно проверяется связь
+        компании с демопользователем
 
       parameters:
         - name: companyID
@@ -397,14 +503,13 @@ paths:
             schema:
               type: object
               required:
-                - demo_user_id
                 - role
               properties:
                 demo_user_id:
                   type: integer
                   format: int64
                   minimum: 1
-                  description: ID выбранного демопользователя
+                  description: Необязательный ID выбранного демопользователя
 
                 role:
                   type: string
@@ -432,9 +537,11 @@ paths:
                     type: string
                     format: uuid
                     description: Уникальный идентификатор задачи анализа
+              example:
+                job_id: b81f3c40-6d7a-4ff0-b697-a13a32afc184
 
         '400':
-          description: Некорректный ID пользователя, компании или роль
+          description: Некорректный ID компании, ID демопользователя или роль
 
         '404':
           description: >
