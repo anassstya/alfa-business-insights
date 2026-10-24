@@ -2,9 +2,11 @@ package repo
 
 import (
 	"context"
+	"errors"
 
 	"alfa-business-insights/backend/model"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -172,4 +174,52 @@ func (r *CompanyRepository) GetAll(ctx context.Context, limit int, offset int) (
 	}
 
 	return companies, total, nil
+}
+
+func (r *CompanyRepository) GetByID(ctx context.Context, companyID int64) (*model.Company, error) {
+	var company model.Company
+
+	err := r.db.QueryRow(ctx, `
+		SELECT
+			id,
+			synthetic_u,
+			city,
+			region,
+			NULLIF(revenue_company, 1000),
+			mainokved_name,
+			mainokved_code,
+			org_type,
+			okfs_name,
+			company_age_years_gradation,
+			eco_mark_label,
+			amount_workers_fns_gradation,
+			cl_type
+		FROM companies
+		WHERE id = $1
+		  AND cl_type = 'CLIENT'
+	`, companyID).Scan(
+		&company.ID,
+		&company.SyntheticU,
+		&company.City,
+		&company.Region,
+		&company.RevenueCompany,
+		&company.MainOKVEDName,
+		&company.MainOKVEDCode,
+		&company.OrgType,
+		&company.OKFSName,
+		&company.CompanyAgeYearsGradation,
+		&company.EcoMarkLabel,
+		&company.AmountWorkersFNSGradation,
+		&company.CLType,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &company, nil
 }

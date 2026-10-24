@@ -58,7 +58,8 @@ func main() {
 	mux.HandleFunc("GET /api/v1/demo/users/{id}/companies", companyHandler.GetByDemoUserID)
 	mux.HandleFunc("GET /api/v1/companies", companyHandler.GetAll)
 	mux.HandleFunc("POST /api/v1/companies/{companyID}/analysis", analysisHandler.StartAnalysis)
-
+	mux.HandleFunc("GET /api/v1/companies/{companyID}", companyHandler.GetByID)
+	
 	server := &http.Server{
 		Addr:              ":8080",
 		Handler:           cors(mux),
