@@ -69,6 +69,12 @@
       "title": "Event",
       "type": "string"
     },
+    "ai_interpretation": {
+      "default": "",
+      "maxLength": 1500,
+      "title": "Ai Interpretation",
+      "type": "string"
+    },
     "company_relevance": {
       "maxLength": 1500,
       "title": "Company Relevance",
@@ -133,6 +139,15 @@
       },
       "maxItems": 12,
       "title": "Evidence Refs",
+      "type": "array"
+    },
+    "evidence_sources": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "maxItems": 12,
+      "title": "Evidence Sources",
       "type": "array"
     },
     "feature_refs": {

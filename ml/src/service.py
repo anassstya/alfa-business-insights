@@ -15,6 +15,8 @@ from .api import GatewayClient, ModelSettings
 from .pipeline import AnalysisPipeline
 from .profile_repository import JsonCompanyProfileRepository, SupabaseCompanyProfileRepository, ROOT
 from .research_pipeline import ResearchPipeline
+from .research_context_repository import SupabaseResearchContextRepository
+from .web_pipeline import WebAnalysisPipeline
 from .web_research import FileEvidenceStore, HTTPDocumentFetcher, TavilySearchProvider, search_news
 
 
@@ -37,7 +39,8 @@ class ServiceSettings:
 def create_app(*, settings: ServiceSettings | None = None,
                pipeline: AnalysisPipeline | None = None,
                news_provider=None, document_fetcher=None, evidence_store=None,
-               research_pipeline: ResearchPipeline | None = None) -> FastAPI:
+               research_pipeline: ResearchPipeline | None = None,
+               web_pipeline: WebAnalysisPipeline | None = None) -> FastAPI:
     settings = settings or ServiceSettings()
     if pipeline is None and settings.fixture_mode:
         repository = JsonCompanyProfileRepository(
@@ -64,9 +67,23 @@ def create_app(*, settings: ServiceSettings | None = None,
 
     @app.post("/internal/analyze", response_model=AnalysisResult)
     def internal_analyze(body: AnalysisRequest, _authorized: None = Depends(authorize)):
-        if not settings.fixture_mode or pipeline is None:
+        if settings.fixture_mode:
+            if pipeline is None:
+                raise HTTPException(status_code=503, detail="fixture pipeline is disabled")
+            return pipeline.analyze(body)
+        if web_pipeline is not None:
+            return web_pipeline.analyze(body)
+        if pipeline is not None:
             raise HTTPException(status_code=503, detail="fixture pipeline is disabled")
-        return pipeline.analyze(body)
+        repository = SupabaseCompanyProfileRepository.from_env()
+        context_repository = SupabaseResearchContextRepository(repository.engine)
+        try:
+            model = GatewayClient(ModelSettings.from_environment())
+            research = ResearchPipeline(repository, model, news_provider or TavilySearchProvider(),
+                                        document_fetcher or HTTPDocumentFetcher(), store)
+            return WebAnalysisPipeline(research, context_repository).analyze(body)
+        finally:
+            repository.close()
 
     @app.post("/internal/news/search")
     def internal_news_search(body: SearchTask, _authorized: None = Depends(authorize)):

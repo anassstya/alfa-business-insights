@@ -67,6 +67,11 @@
       "minimum": 0,
       "title": "Max Insights",
       "type": "integer"
+    },
+    "refresh_web_research": {
+      "default": false,
+      "title": "Refresh Web Research",
+      "type": "boolean"
     }
   },
   "required": [

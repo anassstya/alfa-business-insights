@@ -14,9 +14,9 @@ class BudgetExceeded(Exception):
 @dataclass
 class BudgetManager:
     timeout_seconds: float = 120
-    max_llm_calls: int = 3
-    max_input_tokens: int = 18000
-    max_output_tokens: int = 6000
+    max_llm_calls: int = 4
+    max_input_tokens: int = 15000
+    max_output_tokens: int = 9000
     max_tool_calls: int = 6
     max_search_tasks: int = 6
     cancelled: threading.Event = field(default_factory=threading.Event)

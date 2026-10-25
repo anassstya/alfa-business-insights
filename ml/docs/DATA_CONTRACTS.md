@@ -196,7 +196,7 @@ alfa_analytics: {}
 | `SearchTask` | `task_id`, `exposure_ids[]`, `question`, `query`, `source_kind`, `filters`, `priority`, `reason`, `expected_evidence`, `max_results` |
 | `EvidenceRecord` | `evidence_id`, `document_id`, `source_kind`, `title`, `publisher`, `url`, `published_at`, `retrieved_at`, `event_at`, `excerpt`, `content_hash`, `page_number`, `date_status`, `content_status` |
 | `CompanyResearchContext` | `schema_version`, `company_id`, `profile_hash`, `as_of`, `window`, `exposures[]`, `tasks[]`, `evidence[]`, `coverage`, `gaps[]`, `versions`, `expires_at` |
-| `Insight` | `insight_id`, `event`, `company_relevance`, `role_relevance`, `impact_chain[]`, `bank_view`, `risks[]`, `opportunities[]`, `suggested_actions[]`, `assumptions[]`, `uncertainty`, `evidence_refs[]`, `feature_refs[]`, `rank` |
+| `Insight` | `insight_id`, `event`, `ai_interpretation`, `company_relevance`, `role_relevance`, `impact_chain[]`, `bank_view`, `risks[]`, `opportunities[]`, `suggested_actions[]`, `assumptions[]`, `uncertainty`, `evidence_refs[]`, `evidence_sources[]`, `feature_refs[]`, `rank` |
 | `AnalysisResult` | `schema_version`, `job_id`, `run_id`, `company_id`, `company_row_id`, `role`, `goal`, `as_of`, `mode`, `outcome`, `insights[]`, `evidence[]`, `profile_snapshot`, `research_context`, `warnings[]`, `trace[]`, `usage`, `versions` |
 
 Правила:

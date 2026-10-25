@@ -126,6 +126,7 @@ class BankView(Contract):
 class Insight(Versioned):
     insight_id: str = Field(max_length=80)
     event: str = Field(max_length=1000)
+    ai_interpretation: str = Field(default="", max_length=1500)
     company_relevance: str = Field(max_length=1500)
     role_relevance: str = Field(max_length=1500)
     impact_chain: list[str] = Field(max_length=8)
@@ -136,6 +137,7 @@ class Insight(Versioned):
     assumptions: list[str] = Field(default_factory=list, max_length=15)
     uncertainty: str = Field(max_length=1000)
     evidence_refs: list[str] = Field(max_length=12)
+    evidence_sources: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
     feature_refs: list[str] = Field(max_length=20)
     rank: PositiveInt
 
@@ -149,6 +151,7 @@ class AnalysisRequest(Versioned):
     as_of: datetime
     lookback_days: int = Field(default=30, ge=1, le=365)
     max_insights: int = Field(default=5, ge=0, le=5)
+    refresh_web_research: bool = False
 
 
 class StageEvent(Versioned):

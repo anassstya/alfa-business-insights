@@ -109,6 +109,7 @@ class ResearchPipeline:
         self.provider, self.fetcher, self.store = provider, fetcher, store
 
     def run(self, request: AnalysisRequest, *, budget: BudgetManager | None = None,
+            profile: BaseCompanyProfile | None = None,
             on_event: Callable[[StageEvent], None] | None = None) -> CompanyResearchContext:
         request = AnalysisRequest.model_validate(request)
         budget = budget or BudgetManager()
@@ -125,7 +126,7 @@ class ResearchPipeline:
 
         emit("loading_profile", "started", "Loading prepared company profile")
         try:
-            profile = self.repository.get_company_profile(request.company_id, request.company_row_id)
+            profile = profile or self.repository.get_company_profile(request.company_id, request.company_row_id)
         except Exception:
             emit("loading_profile", "failed", "Prepared profile unavailable")
             raise
@@ -210,10 +211,15 @@ class ResearchPipeline:
                 emit("retrieving", "failed", f"Search {task.task_id} failed")
         evidence = list({e.evidence_id: e for e in evidence}.values())[:48]
         coverage["usage"] = budget.usage()
+        coverage["all_sources_unavailable"] = bool(tasks) and not evidence and (
+            coverage["tasks_executed"] == 0 or
+            len(coverage["source_errors"]) >= coverage["tasks_executed"] > 0 or
+            any(event.stage == "retrieving" and event.state == "failed" for event in trace))
         emit("completed", "completed", "Web research context ready", evidence=len(evidence))
         return CompanyResearchContext(company_id=request.company_id, profile_hash=profile.profile_hash,
                                       as_of=request.as_of, window=window, exposures=exposures,
                                       tasks=tasks, evidence=evidence, coverage=coverage,
                                       gaps=list(dict.fromkeys(gaps))[:30],
                                       versions={"pipeline": PIPELINE_VERSION, "exposure_rules": RULE_VERSION,
-                                                "model": self.model.settings.model}, trace=trace)
+                                                "model": self.model.settings.model}, trace=trace,
+                                      expires_at=datetime.now(timezone.utc) + timedelta(hours=1))
