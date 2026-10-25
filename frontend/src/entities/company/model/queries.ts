@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query";
-import { getCompanies, getCompaniesByUserId, getCompanyAnalysis } from "../api/companyApi";
+import { getCompanies, getCompanyById, getCompaniesByUserId, getCompanyAnalysis } from "../api/companyApi";
 import { COMPANIES_PAGE_SIZE, type CompaniesResponse, type Company } from "./types";
 
 const companyKeys = {
@@ -61,25 +61,17 @@ const findCachedCompany = (queryClient: QueryClient, id: number) => {
 }
 
 /**
- * FIXME(openapi): эндпоинта GET /api/v1/companies/{id} нет ни в спецификации, ни на backend.
- * Пока берём компанию из уже загруженных списков — выбрать её можно только из них,
- * но после перезагрузки страницы без списков в кэше карточка покажет ошибку.
- * Когда эндпоинт появится, queryFn нужно заменить на запрос.
+ * GET /api/v1/companies/{companyID}.
+ * Пока ответ не пришёл, показываем компанию из уже загруженных списков (placeholderData),
+ * чтобы подпись в селекте и карточка не мигали скелетоном.
  */
 const useCompany = (id: number | null) => {
   const queryClient = useQueryClient();
 
-  return useQuery({
+  return useQuery<Company>({
     queryKey: companyKeys.detail(id ?? 0),
-    queryFn: () => {
-      const company = findCachedCompany(queryClient, id!);
-
-      if (!company) {
-        throw new Error(`Компания ${id} не найдена в загруженных списках`);
-      }
-
-      return company;
-    },
+    queryFn: ({ signal }) => getCompanyById(id!, signal),
+    placeholderData: () => (id === null ? undefined : findCachedCompany(queryClient, id)),
     enabled: id !== null,
     staleTime: 1000 * 60 * 5,
   })

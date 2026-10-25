@@ -66,6 +66,21 @@ const mockAdapter: AxiosAdapter = (config) => {
     return respond(config, { companies: slice(COMPANIES, limit, offset), total: COMPANIES.length, limit, offset });
   }
 
+  const companyMatch = url.match(/^\/api\/v1\/companies\/([^/]+)$/);
+  if (companyMatch) {
+    const companyId = Number(companyMatch[1]);
+
+    if (!Number.isInteger(companyId) || companyId < 1) {
+      return respond(config, { error: 'Некорректный ID компании' }, 400);
+    }
+
+    const company = COMPANIES.find(item => item.id === companyId && item.cl_type === 'CLIENT');
+
+    return company
+      ? respond(config, company)
+      : respond(config, { error: 'Компания не найдена или недоступна' }, 404);
+  }
+
   if (url === '/api/v1/news') {
     const company = COMPANIES.find(c => c.id === Number(params.company_id));
     const from = params.date_from ? new Date(`${params.date_from}T00:00:00`) : null;

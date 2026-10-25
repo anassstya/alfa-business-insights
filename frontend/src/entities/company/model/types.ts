@@ -21,6 +21,14 @@ interface Company {
   cl_type: string | null;
 }
 
+/**
+ * Ответ GET /api/v1/companies/{companyID} — та же схема, что в списках,
+ * но cl_type обязателен и всегда 'CLIENT' (не-клиентов backend отдаёт как 404).
+ */
+interface CompanyDetails extends Omit<Company, 'cl_type'> {
+  cl_type: 'CLIENT';
+}
+
 /** Query-параметры GET /api/v1/companies: limit 1..100 (по умолчанию 20), offset ≥ 0 */
 type CompaniesParams = PaginationParams;
 
@@ -55,4 +63,4 @@ interface CompanyAnalyticsResponse {
 }
 
 export { COMPANIES_MAX_LIMIT, COMPANIES_PAGE_SIZE };
-export type { Company, CompaniesParams, CompaniesResponse, UserCompaniesResponse, CompanyAnalyticsResponse, CompanyAnalyticsBody };
+export type { Company, CompanyDetails, CompaniesParams, CompaniesResponse, UserCompaniesResponse, CompanyAnalyticsResponse, CompanyAnalyticsBody };
