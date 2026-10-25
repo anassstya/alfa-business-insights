@@ -121,7 +121,7 @@ class ResearchTests(unittest.TestCase):
         with self.assertRaises(BudgetExceeded):
             self.pipeline([plan([task()])]).run(self.request, budget=cancelled)
         expired = BudgetManager(timeout_seconds=0.001)
-        time.sleep(0.01)
+        expired.started -= 1  # Deterministic expiry, independent of Windows timer resolution.
         with self.assertRaises(BudgetExceeded):
             self.pipeline([plan([task()])]).run(self.request, budget=expired)
         limited = BudgetManager(max_llm_calls=0)

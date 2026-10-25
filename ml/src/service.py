@@ -12,6 +12,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
 from .contracts import AnalysisRequest, AnalysisResult, CompanyResearchContext, SearchTask
 from .api import GatewayClient, ModelSettings
+from .analysis_job_repository import (
+    AnalysisJobConflict, AnalysisJobPermissionError, AnalysisJobStoreError,
+    SupabaseAnalysisJobRepository, analyze_and_save,
+)
 from .pipeline import AnalysisPipeline
 from .profile_repository import JsonCompanyProfileRepository, SupabaseCompanyProfileRepository, ROOT
 from .research_pipeline import ResearchPipeline
@@ -32,6 +36,7 @@ class ServiceSettings:
         self.fixture_mode = _enabled(environ.get("ML_FIXTURE_MODE"))
         self.local_dev_mode = _enabled(environ.get("ML_LOCAL_DEV_MODE"))
         self.service_token = environ.get("ML_SERVICE_TOKEN") or None
+        self.persist_analysis_jobs = _enabled(environ.get("ML_PERSIST_ANALYSIS_JOBS", "true"))
         self.evidence_cache = Path(environ.get("ML_EVIDENCE_CACHE") or
                                    Path(__file__).resolve().parents[1] / ".cache" / "web")
 
@@ -40,7 +45,8 @@ def create_app(*, settings: ServiceSettings | None = None,
                pipeline: AnalysisPipeline | None = None,
                news_provider=None, document_fetcher=None, evidence_store=None,
                research_pipeline: ResearchPipeline | None = None,
-               web_pipeline: WebAnalysisPipeline | None = None) -> FastAPI:
+               web_pipeline: WebAnalysisPipeline | None = None,
+               job_repository=None) -> FastAPI:
     settings = settings or ServiceSettings()
     if pipeline is None and settings.fixture_mode:
         repository = JsonCompanyProfileRepository(
@@ -72,7 +78,7 @@ def create_app(*, settings: ServiceSettings | None = None,
                 raise HTTPException(status_code=503, detail="fixture pipeline is disabled")
             return pipeline.analyze(body)
         if web_pipeline is not None:
-            return web_pipeline.analyze(body)
+            return run_live(web_pipeline, body)
         if pipeline is not None:
             raise HTTPException(status_code=503, detail="fixture pipeline is disabled")
         repository = SupabaseCompanyProfileRepository.from_env()
@@ -81,9 +87,34 @@ def create_app(*, settings: ServiceSettings | None = None,
             model = GatewayClient(ModelSettings.from_environment())
             research = ResearchPipeline(repository, model, news_provider or TavilySearchProvider(),
                                         document_fetcher or HTTPDocumentFetcher(), store)
-            return WebAnalysisPipeline(research, context_repository).analyze(body)
+            return run_live(WebAnalysisPipeline(research, context_repository), body,
+                            SupabaseAnalysisJobRepository(repository.engine))
         finally:
             repository.close()
+
+    def run_live(runner, body, default_jobs=None):
+        if not settings.persist_analysis_jobs:
+            return runner.analyze(body)
+        jobs = job_repository or default_jobs
+        owns_jobs = jobs is None
+        try:
+            jobs = jobs or SupabaseAnalysisJobRepository.from_env()
+            return analyze_and_save(runner, body, jobs)
+        except AnalysisJobConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except AnalysisJobPermissionError as exc:
+            raise HTTPException(status_code=503, detail={
+                "code": "analysis_jobs_permission_denied", "message": str(exc),
+                "job_id": str(body.job_id),
+            }) from exc
+        except AnalysisJobStoreError as exc:
+            raise HTTPException(status_code=503, detail={
+                "code": "analysis_jobs_persistence_failed", "message": str(exc),
+                "job_id": str(body.job_id),
+            }) from exc
+        finally:
+            if owns_jobs and jobs is not None:
+                jobs.close()
 
     @app.post("/internal/news/search")
     def internal_news_search(body: SearchTask, _authorized: None = Depends(authorize)):

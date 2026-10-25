@@ -133,6 +133,13 @@ class WebPipelineTests(unittest.TestCase):
         self.assertEqual(first.research_context.evidence[0].evidence_id, old_id)
         self.assertEqual(self.writer.get_web_research("U_EXAMPLE").context.evidence, [])
 
+    def test_empty_initial_json_context_is_not_a_validation_error(self):
+        self.path.write_text(json.dumps({**self.payload, "web_research": {}}), encoding="utf-8")
+        self.assertIsNone(self.writer.get_web_research("U_EXAMPLE"))
+        candidate, _ = self.with_evidence()
+        runner, _, _ = self.runner(candidate=candidate)
+        self.assertEqual(runner.analyze(self.request).outcome, "ok")
+
     def test_invalid_ref_and_honest_empty(self):
         candidate, context = self.with_evidence()
         bad = {**candidate, "evidence_refs": ["missing"], "evidence_quotes": {"missing": "text"}}
@@ -180,7 +187,8 @@ class WebPipelineTests(unittest.TestCase):
     def test_http_live_with_injected_pipeline(self):
         candidate, _ = self.with_evidence()
         runner, _, _ = self.runner(candidate=candidate)
-        app = create_app(settings=ServiceSettings({"ML_SERVICE_TOKEN": "test"}), web_pipeline=runner)
+        app = create_app(settings=ServiceSettings({"ML_SERVICE_TOKEN": "test",
+                                                  "ML_PERSIST_ANALYSIS_JOBS": "false"}), web_pipeline=runner)
         with TestClient(app) as client:
             response = client.post("/internal/analyze", json=self.request.model_dump(mode="json"),
                                    headers={"Authorization": "Bearer test"})

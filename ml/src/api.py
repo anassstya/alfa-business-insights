@@ -43,7 +43,7 @@ class ModelFormatError(ModelError):
 class ModelSettings:
     api_key: str
     model: str = DEFAULT_MODEL
-    timeout: float = 20.0
+    timeout: float = 60.0
     native_schema_confirmed: bool = False
 
     @classmethod
@@ -54,7 +54,7 @@ class ModelSettings:
         if not key:
             raise ModelConfigurationError("MODEL_API_KEY is missing")
         return cls(api_key=key, model=model or os.getenv("ML_MODEL") or DEFAULT_MODEL,
-                   timeout=float(os.getenv("ML_MODEL_TIMEOUT", "20")),
+                   timeout=float(os.getenv("ML_MODEL_TIMEOUT", "60")),
                    native_schema_confirmed=os.getenv("ML_NATIVE_SCHEMA_CONFIRMED", "false").lower() == "true")
 
 

@@ -12,10 +12,12 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from dotenv import load_dotenv
+from psycopg import ClientCursor
 from pydantic import ValidationError
 from sqlalchemy import URL, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.engine import Engine
+from sqlalchemy.pool import NullPool
 
 from .contracts import BaseCompanyProfile
 
@@ -160,16 +162,29 @@ class SupabaseSettings:
                               password=environ["POSTGRES_PASSWORD"], host=host,
                               port=port, database=environ["POSTGRES_DB"])
         self.connect_args = {"connect_timeout": timeout,
-                             "sslmode": environ.get("POSTGRES_SSLMODE", "require")}
+                             "sslmode": environ.get("POSTGRES_SSLMODE", "require"),
+                             "autocommit": True, "gssencmode": "disable",
+                             "cursor_factory": ClientCursor}
         if self.connect_args["sslmode"] not in ("require", "verify-ca", "verify-full"):
             raise ProfileStoreUnavailable("SSL mode must verify or require TLS")
         if self.mode == "transaction":
             self.connect_args["prepare_threshold"] = None
 
     def create_engine(self) -> Engine:
-        return create_engine(self.url, connect_args=self.connect_args,
-                             pool_size=2, max_overflow=0, pool_timeout=5,
-                             pool_pre_ping=True)
+        engine = create_engine(self.url, connect_args=self.connect_args,
+                               isolation_level="AUTOCOMMIT", use_native_hstore=False,
+                               poolclass=NullPool, hide_parameters=True,
+                               skip_autocommit_rollback=True)
+        # The current remote connection stalls after several statements. Initialize
+        # the dialect on a disposable connection; each actual operation then uses
+        # one fresh connection and one atomic statement, as the batch writer does.
+        try:
+            with engine.connect():
+                pass
+        except SQLAlchemyError as exc:
+            engine.dispose()
+            raise ProfileStoreUnavailable("remote database initialization failed") from exc
+        return engine
 
 
 class SupabaseCompanyProfileRepository(CompanyProfileRepository):
@@ -188,20 +203,21 @@ class SupabaseCompanyProfileRepository(CompanyProfileRepository):
             raise ValueError("company_id must be a string synthetic_u")
         try:
             with self.engine.connect() as conn:
-                # One read-only transaction, bounded identity lookup and one payload.
-                conn.execute(text("SET TRANSACTION READ ONLY"))
-                conn.execute(text("SET LOCAL statement_timeout = '5000ms'"))
-                rows = conn.execute(text("SELECT id FROM public.companies WHERE synthetic_u = :company_id ORDER BY id LIMIT 2"),
-                                    {"company_id": company_id}).scalars().all()
-                _check_identity(company_id, rows, company_row_id)
-                row = conn.execute(text("SELECT payload, updated_at FROM public.company_contexts WHERE company_id = :company_id"),
-                                   {"company_id": company_id}).first()
-            if row is None:
+                # One SELECT obtains a consistent identity/profile without session state.
+                # Short autocommit statements avoid the observed pooler transaction hangs.
+                rows = conn.execute(text("""SELECT c.id,
+                    x.payload - 'web_research' - 'alfa_analytics' - '__ml_jsonb_upload__', x.updated_at
+                    FROM public.companies c
+                    LEFT JOIN public.company_contexts x ON x.company_id = c.synthetic_u
+                    WHERE c.synthetic_u = :company_id ORDER BY c.id LIMIT 2"""),
+                    {"company_id": company_id}).all()
+            _check_identity(company_id, [row[0] for row in rows], company_row_id)
+            if rows[0][1] is None:
                 raise ProfileNotPrepared(company_id)
             try:
-                payload = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                payload = json.loads(rows[0][1]) if isinstance(rows[0][1], str) else rows[0][1]
             except json.JSONDecodeError as exc:
                 raise InvalidProfile("invalid JSON payload") from exc
-            return _profile(company_id, payload, "supabase", row[1])
+            return _profile(company_id, payload, "supabase", rows[0][2])
         except SQLAlchemyError as exc:
             raise ProfileStoreUnavailable("profile store query failed") from exc

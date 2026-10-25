@@ -36,16 +36,15 @@ class ProfileTests(unittest.TestCase):
         local = self.repo().get_company_profile("U_1", 7)
         engine = MagicMock()
         conn = engine.connect.return_value.__enter__.return_value
-        conn.execute.side_effect = [MagicMock(), MagicMock(),
-                                    MagicMock(scalars=lambda: MagicMock(all=lambda: [7])),
-                                    MagicMock(first=lambda: (payload(), None))]
+        conn.execute.return_value.all.return_value = [(7, payload(), None)]
         remote = SupabaseCompanyProfileRepository(engine).get_company_profile("U_1", 7)
         self.assertEqual(local.base_information, remote.base_information)
         self.assertEqual(local.profile_hash, remote.profile_hash)
         self.assertEqual(local.base_information.profile["annual_revenue"], 0)
         self.assertIsNone(local.base_information.data_quality["payment_period"])
         self.assertEqual(remote.source, "supabase")
-        self.assertIn("READ ONLY", str(conn.execute.call_args_list[0].args[0]))
+        self.assertEqual(conn.execute.call_count, 1)
+        self.assertTrue(str(conn.execute.call_args.args[0]).lstrip().startswith("SELECT"))
 
     def test_identity_and_missing(self):
         with self.assertRaises(CompanyNotFound):

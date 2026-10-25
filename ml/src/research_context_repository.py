@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .contracts import CompanyResearchContext, Role
 from .profile_repository import SupabaseSettings
+from .jsonb_storage import JsonbWriteConflict, update_jsonb
 
 
 class ResearchContextStoreError(Exception):
@@ -71,7 +72,7 @@ class JsonResearchContextRepository(ResearchContextRepository):
         if payload.get("company_id") != company_id:
             raise ResearchContextStoreError("company context missing")
         block = payload.get("web_research")
-        return SavedWebResearch.model_validate(block) if block is not None else None
+        return SavedWebResearch.model_validate(block) if block else None
 
     def replace_web_research(self, company_id, context, scope):
         block = _block(company_id, context, scope)
@@ -100,7 +101,6 @@ class SupabaseResearchContextRepository(ResearchContextRepository):
         """Read-only privilege probe; an UPDATE may still be denied by RLS."""
         try:
             with self.engine.connect() as conn:
-                conn.execute(text("SET TRANSACTION READ ONLY"))
                 row = conn.execute(text("""SELECT
                     has_column_privilege(current_user, 'public.company_contexts', 'payload', 'UPDATE')
                     AND has_column_privilege(current_user, 'public.company_contexts', 'updated_at', 'UPDATE')""")).scalar_one()
@@ -111,13 +111,11 @@ class SupabaseResearchContextRepository(ResearchContextRepository):
     def get_web_research(self, company_id):
         try:
             with self.engine.connect() as conn:
-                conn.execute(text("SET TRANSACTION READ ONLY"))
-                conn.execute(text("SET LOCAL statement_timeout = '5000ms'"))
                 row = conn.execute(text("SELECT payload->'web_research' FROM public.company_contexts WHERE company_id=:id"), {"id": company_id}).first()
             if row is None:
                 raise ResearchContextStoreError("company context missing")
             value = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-            return SavedWebResearch.model_validate(value) if value is not None else None
+            return SavedWebResearch.model_validate(value) if value else None
         except SQLAlchemyError as exc:
             raise ResearchContextStoreError("web research read failed") from exc
 
@@ -126,17 +124,13 @@ class SupabaseResearchContextRepository(ResearchContextRepository):
         if not self.can_update_web_research():
             raise ResearchContextPermissionError("UPDATE company_contexts permission denied")
         try:
-            with self.engine.begin() as conn:
-                conn.execute(text("SET LOCAL statement_timeout = '5000ms'"))
-                row = conn.execute(text("""UPDATE public.company_contexts
-                    SET payload=jsonb_set(payload, '{web_research}', CAST(:block AS jsonb), true),
-                        updated_at=now()
-                    WHERE company_id=:id AND payload ? 'base_information'
-                    RETURNING company_id"""),
-                    {"id": company_id, "block": block.model_dump_json()}).first()
-            if row is None:
-                raise ResearchContextStoreError("prepared company context missing")
+            update_jsonb(self.engine, table="company_contexts", column="payload",
+                         where="company_id=:id AND payload ? 'base_information'",
+                         params={"id": company_id}, document=block.model_dump_json(),
+                         destination="web_research")
             return block
+        except JsonbWriteConflict as exc:
+            raise ResearchContextStoreError("prepared company context missing or upload superseded") from exc
         except SQLAlchemyError as exc:
             code = getattr(getattr(exc, "orig", None), "sqlstate", None)
             if code == "42501":
