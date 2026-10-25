@@ -1,0 +1,49 @@
+name: ${COMPOSE_PROJECT_NAME:-alfa-business-insights}
+
+services:
+  ml:
+    image: alfa-business-insights-ml:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ML_PORT:-8001}:8000"
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-}
+      POSTGRES_PORT: ${POSTGRES_PORT:-6543}
+      POSTGRES_CONNECTION_MODE: ${POSTGRES_CONNECTION_MODE:-transaction}
+      POSTGRES_USER: ${POSTGRES_USER:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-require}
+      POSTGRES_CONNECT_TIMEOUT: ${POSTGRES_CONNECT_TIMEOUT:-5}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      ML_MODEL: ${ML_MODEL:-deepseek/deepseek-v4.1-flash}
+      ML_MODEL_TIMEOUT: ${ML_MODEL_TIMEOUT:-60}
+      ML_NATIVE_SCHEMA_CONFIRMED: ${ML_NATIVE_SCHEMA_CONFIRMED:-false}
+      TAVILY_API: ${TAVILY_API:-}
+      ML_FIXTURE_MODE: ${ML_FIXTURE_MODE:-false}
+      ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:?ML_SERVICE_TOKEN_is_required}
+      ML_LOCAL_DEV_MODE: "false"
+      ML_CALLBACK_ENABLED: ${ML_CALLBACK_ENABLED:-false}
+      ML_CALLBACK_URL: ${ML_CALLBACK_URL:-http://backend:8080/api/v1/internal/analysis/events}
+      ML_CALLBACK_TOKEN: ${ML_CALLBACK_TOKEN:-}
+      ML_CALLBACK_TIMEOUT: ${ML_CALLBACK_TIMEOUT:-5}
+      ML_EVIDENCE_CACHE: /app/ml/.cache/web
+      ML_CHAT_RESULT_SOURCE: ${ML_CHAT_RESULT_SOURCE:-backend}
+      ML_BACKEND_URL: ${ML_BACKEND_URL:-http://backend:8080}
+      ML_BACKEND_TOKEN: ${ML_BACKEND_TOKEN:-}
+    volumes:
+      - ml_cache:/app/ml/.cache
+    networks:
+      - hack_network
+
+networks:
+  hack_network:
+    name: ${COMPOSE_PROJECT_NAME:-alfa-business-insights}_hack_network
+    driver: bridge
+
+volumes:
+  ml_cache:

@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "cfo": {"focus": ["cash flow", "funding terms", "margin sensitivity", "scenarios"], "action": "Check financing schedule and cost assumptions against verified terms."},
+  "treasurer": {"focus": ["liquidity horizon", "settlement currency", "placement terms", "refinancing dates"], "action": "Check liquidity dates and settlement exposures before proposing a response."},
+  "ceo": {"focus": ["customer demand", "operational continuity", "investment", "counterparties"], "action": "Check order pipeline and operating dependencies with responsible teams."},
+  "owner": {"focus": ["group resilience", "capital allocation", "strategic risks and opportunities"], "action": "Check which group links and capital flows are actually documented."},
+  "accountant": {"focus": ["confirmed reporting changes", "tax rules", "settlement procedures", "deadlines"], "action": "Verify effective dates and applicability in primary regulatory sources."},
+  "other_c_level": {"focus": ["operational implications", "demand", "function specified by goal"], "action": "Clarify the relevant function before selecting a specific action."},
+  "decision_maker": {"focus": ["management implications", "operational priorities", "questions for responsible executives"], "action": "Route the evidence-backed question to the accountable executive."}
+}

@@ -1,0 +1,115 @@
+{
+  "$defs": {
+    "BaseInformation": {
+      "additionalProperties": true,
+      "properties": {
+        "profile": {
+          "additionalProperties": true,
+          "title": "Profile",
+          "type": "object"
+        },
+        "banking": {
+          "additionalProperties": true,
+          "title": "Banking",
+          "type": "object"
+        },
+        "market_position": {
+          "additionalProperties": true,
+          "title": "Market Position",
+          "type": "object"
+        },
+        "corporate_group": {
+          "additionalProperties": true,
+          "title": "Corporate Group",
+          "type": "object"
+        },
+        "payments": {
+          "additionalProperties": true,
+          "title": "Payments",
+          "type": "object"
+        },
+        "person_links": {
+          "additionalProperties": true,
+          "title": "Person Links",
+          "type": "object"
+        },
+        "data_quality": {
+          "additionalProperties": true,
+          "title": "Data Quality",
+          "type": "object"
+        }
+      },
+      "required": [
+        "profile",
+        "banking",
+        "market_position",
+        "corporate_group",
+        "payments",
+        "person_links",
+        "data_quality"
+      ],
+      "title": "BaseInformation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "company_id": {
+      "maxLength": 128,
+      "pattern": "^U_[A-Za-z0-9_]+$",
+      "title": "Company Id",
+      "type": "string"
+    },
+    "base_information": {
+      "$ref": "#/$defs/BaseInformation"
+    },
+    "source": {
+      "enum": [
+        "json",
+        "supabase"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "source_updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Updated At"
+    },
+    "profile_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Hash",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "company_id",
+    "base_information",
+    "source",
+    "profile_hash"
+  ],
+  "title": "BaseCompanyProfile",
+  "type": "object"
+}

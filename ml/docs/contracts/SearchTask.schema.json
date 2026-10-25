@@ -1,0 +1,84 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "task_id": {
+      "maxLength": 80,
+      "title": "Task Id",
+      "type": "string"
+    },
+    "exposure_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Exposure Ids",
+      "type": "array"
+    },
+    "question": {
+      "maxLength": 500,
+      "title": "Question",
+      "type": "string"
+    },
+    "query": {
+      "maxLength": 300,
+      "title": "Query",
+      "type": "string"
+    },
+    "source_kind": {
+      "enum": [
+        "news",
+        "official_release",
+        "bank_research",
+        "fixture"
+      ],
+      "title": "Source Kind",
+      "type": "string"
+    },
+    "filters": {
+      "additionalProperties": true,
+      "title": "Filters",
+      "type": "object"
+    },
+    "priority": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Priority",
+      "type": "integer"
+    },
+    "reason": {
+      "maxLength": 700,
+      "title": "Reason",
+      "type": "string"
+    },
+    "expected_evidence": {
+      "maxLength": 700,
+      "title": "Expected Evidence",
+      "type": "string"
+    },
+    "max_results": {
+      "maximum": 8,
+      "minimum": 1,
+      "title": "Max Results",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "task_id",
+    "exposure_ids",
+    "question",
+    "query",
+    "source_kind",
+    "priority",
+    "reason",
+    "expected_evidence",
+    "max_results"
+  ],
+  "title": "SearchTask",
+  "type": "object"
+}

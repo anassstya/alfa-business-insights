@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
+  "company_row_id": 123,
+  "company_id": "U_EXAMPLE",
+  "role": "cfo",
+  "goal": "Review possible funding cost",
+  "as_of": "2026-09-15T12:00:00+03:00",
+  "lookback_days": 30,
+  "max_insights": 5
+}
