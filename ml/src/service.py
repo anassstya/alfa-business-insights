@@ -10,9 +10,10 @@ from typing import Mapping
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
-from .contracts import AnalysisRequest, AnalysisResult
+from .contracts import AnalysisRequest, AnalysisResult, SearchTask
 from .pipeline import AnalysisPipeline
 from .profile_repository import JsonCompanyProfileRepository, ROOT
+from .web_research import FileEvidenceStore, HTTPDocumentFetcher, TavilySearchProvider, search_news
 
 
 def _enabled(value: str | None) -> bool:
@@ -27,10 +28,13 @@ class ServiceSettings:
         self.fixture_mode = _enabled(environ.get("ML_FIXTURE_MODE"))
         self.local_dev_mode = _enabled(environ.get("ML_LOCAL_DEV_MODE"))
         self.service_token = environ.get("ML_SERVICE_TOKEN") or None
+        self.evidence_cache = Path(environ.get("ML_EVIDENCE_CACHE") or
+                                   Path(__file__).resolve().parents[1] / ".cache" / "web")
 
 
 def create_app(*, settings: ServiceSettings | None = None,
-               pipeline: AnalysisPipeline | None = None) -> FastAPI:
+               pipeline: AnalysisPipeline | None = None,
+               news_provider=None, document_fetcher=None, evidence_store=None) -> FastAPI:
     settings = settings or ServiceSettings()
     if pipeline is None and settings.fixture_mode:
         repository = JsonCompanyProfileRepository(
@@ -39,6 +43,7 @@ def create_app(*, settings: ServiceSettings | None = None,
         )
         pipeline = AnalysisPipeline(repository)
     app = FastAPI(title="Alfa Business Insights ML", docs_url=None, redoc_url=None)
+    store = evidence_store or FileEvidenceStore(settings.evidence_cache)
 
     @app.get("/health")
     def health():
@@ -59,6 +64,19 @@ def create_app(*, settings: ServiceSettings | None = None,
         if not settings.fixture_mode or pipeline is None:
             raise HTTPException(status_code=503, detail="fixture pipeline is disabled")
         return pipeline.analyze(body)
+
+    @app.post("/internal/news/search")
+    def internal_news_search(body: SearchTask, _authorized: None = Depends(authorize)):
+        return search_news(body, provider=news_provider or TavilySearchProvider(),
+                           fetcher=document_fetcher or HTTPDocumentFetcher(), store=store)
+
+    @app.get("/internal/evidence/{evidence_id}")
+    def internal_evidence(evidence_id: str, _authorized: None = Depends(authorize)):
+        found = store.get(evidence_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail="evidence not found")
+        record, text = found
+        return {"record": record, "text": text}
 
     return app
 

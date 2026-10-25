@@ -125,7 +125,8 @@
       "enum": [
         "full_text",
         "excerpt_only",
-        "fetch_failed"
+        "fetch_failed",
+        "paywall"
       ],
       "title": "Content Status",
       "type": "string"

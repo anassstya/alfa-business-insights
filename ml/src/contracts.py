@@ -93,7 +93,7 @@ class EvidenceRecord(Versioned):
     content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     page_number: PositiveInt | None = None
     date_status: Literal["known", "unknown", "archived"]
-    content_status: Literal["full_text", "excerpt_only", "fetch_failed"]
+    content_status: Literal["full_text", "excerpt_only", "fetch_failed", "paywall"]
 
 
 class ResearchWindow(Contract):
