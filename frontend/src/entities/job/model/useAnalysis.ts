@@ -12,7 +12,23 @@ const useAnalysis = <TConnect, TProgress, TComplete, TFail>(job?: string) => {
   const [isComplete, setIsComplete] = useState(false)
   const [isFail, setIsFail] = useState(false)
   const [isError, setIsError] = useState(false)
-  
+
+  // задача сменилась (новый запуск или другая сессия) — данные прошлой задачи ей не принадлежат
+  const [currentJob, setCurrentJob] = useState(job)
+  if (job !== currentJob) {
+    setCurrentJob(job)
+    setConnectData(undefined)
+    setProgressData(undefined)
+    setCompleteData(undefined)
+    setFailData(undefined)
+    setClosed(false)
+    setIsConnect(false)
+    setIsProgress(false)
+    setIsComplete(false)
+    setIsFail(false)
+    setIsError(false)
+  }
+
   const onConnect = useCallback((data: TConnect) => {
     setConnectData(data)
     setIsConnect(!!data)
@@ -35,7 +51,7 @@ const useAnalysis = <TConnect, TProgress, TComplete, TFail>(job?: string) => {
     setIsProgress(false)
     setIsConnect(false)
   }, [])
-  const onError = useCallback((event: Event, closed: boolean) => {
+  const onError = useCallback((_event: Event, closed: boolean) => {
     setClosed(closed);
     setIsError(true)
     setIsFail(false)
@@ -45,7 +61,7 @@ const useAnalysis = <TConnect, TProgress, TComplete, TFail>(job?: string) => {
   }, [])
 
   useEffect(() => {
-    const close = analysisJobEvents(job, { onConnect, onProgress, onComplete, onFail, onError })
+    const close = job ? analysisJobEvents(job, { onConnect, onProgress, onComplete, onFail, onError }) : () => {}
 
     return close
   }, [job, onComplete, onConnect, onError, onFail, onProgress])

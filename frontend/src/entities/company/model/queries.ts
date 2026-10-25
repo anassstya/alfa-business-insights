@@ -41,11 +41,24 @@ const useCompany = (id: number | null) => {
   })
 }
 
-const useCompanyAnalysis = () => useMutation({
-  mutationKey: ['job'],
-  mutationFn: ({ companyId, role, demoUserId, goal }: {companyId?: number, role?: string, demoUserId?: number, goal?: string}) => getCompanyAnalysis(companyId!, { role: role!, demo_user_id: demoUserId, goal }),
-  gcTime: Infinity,
-  retry: false,
+interface CompanyAnalysisParams {
+  companyId: number;
+  role: string;
+  demoUserId?: number;
+  goal?: string;
+}
+
+/**
+ * POST /api/v1/companies/{companyID}/analysis — запуск анализа по кнопке «Начать анализ».
+ * Мутация, а не useQuery: каждый вызов создаёт новую задачу, поэтому запрос уходит только
+ * по явному действию пользователя и никогда — сам (при фокусе окна, смене параметров и т.п.).
+ */
+const useStartCompanyAnalysis = () => useMutation({
+  mutationFn: ({ companyId, role, demoUserId, goal }: CompanyAnalysisParams) =>
+    getCompanyAnalysis(companyId, { role, demo_user_id: demoUserId, goal: goal || undefined }),
 })
 
-export { companyKeys, useInfiniteCompanies, useCompany, useUserCompanies, useCompanyAnalysis };
+export {
+  companyKeys, useInfiniteCompanies, useCompany, useUserCompanies, useStartCompanyAnalysis,
+  type CompanyAnalysisParams,
+};

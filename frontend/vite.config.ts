@@ -11,7 +11,6 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tsconfigPaths(), svgr()],
     server: {
       proxy: {
-        // в dev запросы к /api уходят на backend, чтобы не упираться в CORS
         '/api': {
           target: env.VITE_PROXY_TARGET || 'http://localhost:8080',
           changeOrigin: true,

@@ -40,7 +40,7 @@ const parseData = <T>(event: MessageEvent<string>): T => {
  * переподключался бы каждый раз, когда сервер завершает поток.
  */
 const analysisJobEvents = <TConnect = unknown, TProgress = unknown, TResult = unknown, TFail = unknown>(
-  job: string | undefined,
+  job: string,
   { onConnect, onProgress, onComplete, onFail, onError }: Params<TConnect, TProgress, TResult, TFail>,
 ) => {
   if (!job) {

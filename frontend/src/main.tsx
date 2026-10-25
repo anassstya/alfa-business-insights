@@ -12,6 +12,8 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 const MainPage = lazy(() => import('@/pages/MainPage'))
 // eslint-disable-next-line react-refresh/only-export-components
 const AlfaMainPage = lazy(() => import('@/pages/AlfaMainPage'))
+// eslint-disable-next-line react-refresh/only-export-components
+const AnalysisPage = lazy(() => import('@/pages/AnalysisPage'))
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -37,6 +39,15 @@ createRoot(document.getElementById('root')!).render(
                   </>
                 }
                 />
+              <Route
+                path='/insights/analysis/:jobId'
+                element={
+                  <Layout>
+                    <Header />
+                    <AnalysisPage />
+                  </Layout>
+                }
+              />
               </Routes>
             </BrowserRouter>
           </SessionProvider>
