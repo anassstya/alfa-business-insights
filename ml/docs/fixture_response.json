@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-  "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
+  "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
   "company_id": "U_EXAMPLE",
   "company_row_id": 123,
   "role": "cfo",
@@ -14,6 +14,7 @@
       "schema_version": "1.0",
       "insight_id": "fixture-impact-1",
       "event": "DEMO SCENARIO: financing terms might change; no real event was found.",
+      "ai_interpretation": "",
       "company_relevance": "A company profile was loaded. Its actual financing exposure is unknown in this demonstration.",
       "role_relevance": "For role cfo, verify whether financing terms affect the stated goal.",
       "impact_chain": [
@@ -40,6 +41,19 @@
       "uncertainty": "Illustrative only; no live evidence or bank position was consulted.",
       "evidence_refs": [
         "fixture-financing-1"
+      ],
+      "evidence_sources": [
+        {
+          "evidence_id": "fixture-financing-1",
+          "title": "DEMO SCENARIO: possible financing terms change",
+          "publisher": "ML fixture",
+          "url": null,
+          "source_kind": "fixture",
+          "published_at": null,
+          "retrieved_at": "2026-09-15T12:00:00+03:00",
+          "page_number": null,
+          "quote": "Hypothetical scenario: financing terms could change. No actual event is asserted."
+        }
       ],
       "feature_refs": [
         "/base_information/profile"
@@ -99,7 +113,31 @@
       "payments do not establish goods or services"
     ]
   },
-  "research_context": null,
+  "research_context": {
+    "schema_version": "1.0",
+    "company_id": "U_EXAMPLE",
+    "profile_hash": "c4f4d1f1d2012f20fed450198a3ed8516f4ce16e075b8be851384f39d102a404",
+    "as_of": "2026-09-15T12:00:00+03:00",
+    "window": {
+      "start": "2026-08-16T12:00:00+03:00",
+      "end": "2026-09-15T12:00:00+03:00"
+    },
+    "exposures": [],
+    "tasks": [],
+    "evidence": [],
+    "coverage": {
+      "mode": "fixture",
+      "web_research": "not_started"
+    },
+    "gaps": [
+      "No live web research was performed"
+    ],
+    "versions": {
+      "exposure_rules": "1.0"
+    },
+    "trace": [],
+    "expires_at": null
+  },
   "warnings": [
     "DEMONSTRATION ONLY: evidence and insight are hypothetical, not live news or bank research"
   ],
@@ -107,66 +145,79 @@
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
       "seq": 1,
       "stage": "loading_profile",
       "state": "started",
-      "at": "2026-10-25T13:13:16.960975Z",
+      "at": "2026-10-25T20:03:01.887902Z",
       "summary": "Loading prepared profile",
       "counters": {}
     },
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
       "seq": 2,
       "stage": "loading_profile",
       "state": "completed",
-      "at": "2026-10-25T13:13:16.960975Z",
+      "at": "2026-10-25T20:03:01.888880Z",
       "summary": "Prepared profile loaded",
       "counters": {}
     },
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
       "seq": 3,
       "stage": "mapping_exposures",
-      "state": "skipped",
-      "at": "2026-10-25T13:13:16.960975Z",
-      "summary": "Not implemented in fixture milestone",
+      "state": "started",
+      "at": "2026-10-25T20:03:01.888880Z",
+      "summary": "Mapping profile factors",
       "counters": {}
     },
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
       "seq": 4,
+      "stage": "mapping_exposures",
+      "state": "completed",
+      "at": "2026-10-25T20:03:01.888880Z",
+      "summary": "Profile factors mapped",
+      "counters": {
+        "exposures": 0
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
+      "seq": 5,
       "stage": "planning",
       "state": "skipped",
-      "at": "2026-10-25T13:13:16.960975Z",
-      "summary": "Not implemented in fixture milestone",
+      "at": "2026-10-25T20:03:01.890891Z",
+      "summary": "Fixture mode has no live planner",
       "counters": {}
     },
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
-      "seq": 5,
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
+      "seq": 6,
       "stage": "retrieving",
       "state": "started",
-      "at": "2026-10-25T13:13:16.960975Z",
+      "at": "2026-10-25T20:03:01.890891Z",
       "summary": "Loading hypothetical fixture evidence",
       "counters": {}
     },
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
-      "seq": 6,
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
+      "seq": 7,
       "stage": "retrieving",
       "state": "completed",
-      "at": "2026-10-25T13:13:16.960975Z",
+      "at": "2026-10-25T20:03:01.890891Z",
       "summary": "Fixture evidence loaded",
       "counters": {
         "evidence": 1
@@ -175,22 +226,22 @@
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
-      "seq": 7,
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
+      "seq": 8,
       "stage": "analyzing",
       "state": "started",
-      "at": "2026-10-25T13:13:16.960975Z",
+      "at": "2026-10-25T20:03:01.890891Z",
       "summary": "Building hypothetical fixture insight",
       "counters": {}
     },
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
-      "seq": 8,
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
+      "seq": 9,
       "stage": "analyzing",
       "state": "completed",
-      "at": "2026-10-25T13:13:16.962235Z",
+      "at": "2026-10-25T20:03:01.890891Z",
       "summary": "Fixture insight built",
       "counters": {
         "insights": 1
@@ -199,33 +250,33 @@
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
-      "seq": 9,
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
+      "seq": 10,
       "stage": "validating",
       "state": "started",
-      "at": "2026-10-25T13:13:16.962235Z",
+      "at": "2026-10-25T20:03:01.890891Z",
       "summary": "Validating references and result",
       "counters": {}
     },
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
-      "seq": 10,
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
+      "seq": 11,
       "stage": "validating",
       "state": "completed",
-      "at": "2026-10-25T13:13:16.962235Z",
+      "at": "2026-10-25T20:03:01.891890Z",
       "summary": "Result validated",
       "counters": {}
     },
     {
       "schema_version": "1.0",
       "job_id": "b0ec365b-2200-49d8-a02e-32505e16ef6a",
-      "run_id": "01044f6d-2184-400c-a926-037f18f3663a",
-      "seq": 11,
+      "run_id": "74fd22e8-2f37-47e1-95a3-00447ae4c6c5",
+      "seq": 12,
       "stage": "completed",
       "state": "completed",
-      "at": "2026-10-25T13:13:16.962235Z",
+      "at": "2026-10-25T20:03:01.891890Z",
       "summary": "Fixture analysis finished",
       "counters": {}
     }

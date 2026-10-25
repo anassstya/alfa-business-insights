@@ -63,9 +63,11 @@ class WebAnalysisPipeline:
                 context = saved.context.model_copy(deep=True)
                 emit("retrieving", "skipped", "Compatible saved web research reused")
             else:
-                context = self.research.run(request, budget=budget, profile=profile, on_event=None)
-                for event in context.trace:
-                    emit(event.stage, event.state, event.summary, **event.counters)
+                def forward_research_event(event):
+                    if event.stage not in ("loading_profile", "completed"):
+                        emit(event.stage, event.state, event.summary, **event.counters)
+                context = self.research.run(request, budget=budget, profile=profile,
+                                            on_event=forward_research_event)
                 if context.coverage.get("all_sources_unavailable"):
                     warnings.append("all_web_sources_unavailable")
                     if compatible and saved.context.evidence:

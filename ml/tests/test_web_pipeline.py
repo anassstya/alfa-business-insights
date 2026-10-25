@@ -187,8 +187,7 @@ class WebPipelineTests(unittest.TestCase):
     def test_http_live_with_injected_pipeline(self):
         candidate, _ = self.with_evidence()
         runner, _, _ = self.runner(candidate=candidate)
-        app = create_app(settings=ServiceSettings({"ML_SERVICE_TOKEN": "test",
-                                                  "ML_PERSIST_ANALYSIS_JOBS": "false"}), web_pipeline=runner)
+        app = create_app(settings=ServiceSettings({"ML_SERVICE_TOKEN": "test"}), web_pipeline=runner)
         with TestClient(app) as client:
             response = client.post("/internal/analyze", json=self.request.model_dump(mode="json"),
                                    headers={"Authorization": "Bearer test"})

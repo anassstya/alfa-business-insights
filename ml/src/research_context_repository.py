@@ -12,7 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .contracts import CompanyResearchContext, Role
 from .profile_repository import SupabaseSettings
-from .jsonb_storage import JsonbWriteConflict, update_jsonb
+from .jsonb_storage import JsonbWriteConflict, read_web_research, update_jsonb
 
 
 class ResearchContextStoreError(Exception):
@@ -110,12 +110,10 @@ class SupabaseResearchContextRepository(ResearchContextRepository):
 
     def get_web_research(self, company_id):
         try:
-            with self.engine.connect() as conn:
-                row = conn.execute(text("SELECT payload->'web_research' FROM public.company_contexts WHERE company_id=:id"), {"id": company_id}).first()
-            if row is None:
-                raise ResearchContextStoreError("company context missing")
-            value = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+            value = read_web_research(self.engine, company_id)
             return SavedWebResearch.model_validate(value) if value else None
+        except JsonbWriteConflict as exc:
+            raise ResearchContextStoreError(str(exc)) from exc
         except SQLAlchemyError as exc:
             raise ResearchContextStoreError("web research read failed") from exc
 

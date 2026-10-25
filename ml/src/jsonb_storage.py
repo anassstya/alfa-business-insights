@@ -1,7 +1,7 @@
 """Bounded JSONB uploads over the current remote connection.
 
 Large JSON is staged in bounded text chunks and published by one final UPDATE.
-The old web_research remains readable until publication; a job stays running.
+The old web_research remains readable until publication.
 """
 
 from __future__ import annotations
@@ -35,22 +35,14 @@ def utf8_chunks(value: str):
 
 
 def update_jsonb(engine, *, table: str, column: str, where: str, params: dict,
-                 document: str, destination: str | None = None,
-                 updates: dict | None = None):
+                 document: str, destination: str | None = None):
     """Internal storage helper; SQL predicates come only from repository constants."""
-    targets = {("company_contexts", "payload", "web_research"): "company_id",
-               ("analysis_jobs", "result", None): "id"}
+    targets = {("company_contexts", "payload", "web_research"): "company_id"}
     returning = targets.get((table, column, destination))
     if returning is None:
         raise ValueError("unsupported JSONB storage target")
-    updates = updates or {}
-    if set(updates) - {"status", "stage", "error_message"}:
-        raise ValueError("unsupported job metadata update")
     values = dict(params)
     metadata = ", updated_at=now()"
-    for name, value in updates.items():
-        values[f"finish_{name}"] = value
-        metadata += f", {name}=:finish_{name}"
 
     def execute(expression, parameters, *, condition="", final=False):
         query = text(f"UPDATE public.{table} SET {column}={expression}"
@@ -87,3 +79,32 @@ def update_jsonb(engine, *, table: str, column: str, where: str, params: dict,
     expression = parsed if destination is None else \
         f"jsonb_set({column}, '{{{destination}}}', {parsed}, true) - '{key}'"
     execute(expression, {**values, "upload_id": upload_id}, condition=condition, final=True)
+
+
+def read_web_research(engine, company_id: str):
+    """Read bounded pieces of one immutable JSON version, without large wire responses."""
+    import json
+
+    with engine.connect() as conn:
+        metadata = conn.execute(text("""SELECT
+            octet_length((payload->'web_research')::text),
+            length((payload->'web_research')::text), md5((payload->'web_research')::text)
+            FROM public.company_contexts WHERE company_id=:id"""), {"id": company_id}).first()
+    if metadata is None:
+        raise JsonbWriteConflict("company context missing")
+    if metadata[0] is None:
+        return None
+    if metadata[0] > 2 * 1024 * 1024:
+        raise JsonbWriteConflict("saved research exceeds the 2 MiB read limit")
+    parts = []
+    for offset in range(1, metadata[1] + 1, 1000):
+        with engine.connect() as conn:
+            row = conn.execute(text("""SELECT
+                substring((payload->'web_research')::text FROM :offset FOR 1000)
+                FROM public.company_contexts WHERE company_id=:id
+                  AND md5((payload->'web_research')::text)=:version"""),
+                {"id": company_id, "offset": offset, "version": metadata[2]}).first()
+        if row is None:
+            raise JsonbWriteConflict("research changed while reading; retry with the new version")
+        parts.append(row[0])
+    return json.loads("".join(parts))

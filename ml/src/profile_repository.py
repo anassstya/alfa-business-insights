@@ -76,6 +76,10 @@ def _profile(company_id: str, payload: Any, source: str,
 
 
 class CompanyProfileRepository(ABC):
+    def resolve_company_identity(self, company_id: int | str) -> tuple[str, int]:
+        """Resolve a numeric companies.id or synthetic_u to (synthetic_u, row id)."""
+        raise NotImplementedError
+
     @abstractmethod
     def get_company_profile(self, company_id: str, company_row_id: int | None = None) -> BaseCompanyProfile:
         """Fetch one profile; optional numeric ID must match the unique company row."""
@@ -120,6 +124,24 @@ class JsonCompanyProfileRepository(CompanyProfileRepository):
                 self.identities = {key: [0] for key in self.records}
         except (OSError, UnicodeError, json.JSONDecodeError, KeyError, ValueError) as exc:
             raise ProfileStoreUnavailable("cannot load offline profile snapshot") from exc
+
+    def resolve_company_identity(self, company_id: int | str) -> tuple[str, int]:
+        if isinstance(company_id, bool) or not isinstance(company_id, (int, str)):
+            raise ValueError("company_id must be a positive integer or synthetic_u")
+        if isinstance(company_id, int):
+            if company_id <= 0:
+                raise ValueError("company_id must be positive")
+            matches = [key for key, ids in self.identities.items() if company_id in ids]
+            if not matches:
+                raise CompanyNotFound(str(company_id))
+            if len(matches) != 1:
+                raise AmbiguousCompanyIdentity(str(company_id))
+            company_id = matches[0]
+        ids = self.identities.get(company_id, [])
+        if ids == [0]:
+            raise ProfileStoreUnavailable("numeric identity index is required for company analysis")
+        _check_identity(company_id, ids, None)
+        return company_id, ids[0]
 
     def get_company_profile(self, company_id: str, company_row_id: int | None = None) -> BaseCompanyProfile:
         if not isinstance(company_id, str):
@@ -197,6 +219,25 @@ class SupabaseCompanyProfileRepository(CompanyProfileRepository):
 
     def close(self) -> None:
         self.engine.dispose()
+
+    def resolve_company_identity(self, company_id: int | str) -> tuple[str, int]:
+        if isinstance(company_id, bool) or not isinstance(company_id, (int, str)):
+            raise ValueError("company_id must be a positive integer or synthetic_u")
+        if isinstance(company_id, int) and company_id <= 0:
+            raise ValueError("company_id must be positive")
+        column = "id" if isinstance(company_id, int) else "synthetic_u"
+        try:
+            with self.engine.connect() as conn:
+                rows = conn.execute(text(f"SELECT id, synthetic_u FROM public.companies "
+                                         f"WHERE {column}=:value ORDER BY id LIMIT 2"),
+                                    {"value": company_id}).all()
+        except SQLAlchemyError as exc:
+            raise ProfileStoreUnavailable("company identity lookup failed") from exc
+        if not rows:
+            raise CompanyNotFound(str(company_id))
+        if len(rows) != 1:
+            raise AmbiguousCompanyIdentity(str(company_id))
+        return rows[0][1], rows[0][0]
 
     def get_company_profile(self, company_id: str, company_row_id: int | None = None) -> BaseCompanyProfile:
         if not isinstance(company_id, str):

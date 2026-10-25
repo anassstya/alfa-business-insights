@@ -12,12 +12,19 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
 from .contracts import AnalysisRequest, AnalysisResult, CompanyResearchContext, SearchTask
 from .api import GatewayClient, ModelSettings
-from .analysis_job_repository import (
-    AnalysisJobConflict, AnalysisJobPermissionError, AnalysisJobStoreError,
-    SupabaseAnalysisJobRepository, analyze_and_save,
+from .api import ModelError, ModelFormatError
+from .budget import BudgetExceeded
+from .analysis_chat import (ChatRequest, ChatResponse, answer_analysis_question,
+                            SessionNotFound, SessionNotReady, SessionStoreUnavailable,
+                            ChatContextTooLarge)
+from .company_analysis import CompanyAnalysisInput, _analyze_company
+from .backend_callback import (
+    BackendCallbackClient, CallbackError, CallbackSettings, analyze_with_callback,
 )
 from .pipeline import AnalysisPipeline
-from .profile_repository import JsonCompanyProfileRepository, SupabaseCompanyProfileRepository, ROOT
+from .profile_repository import (AmbiguousCompanyIdentity, CompanyNotFound, ProfileNotPrepared,
+                                 ProfileStoreUnavailable, JsonCompanyProfileRepository,
+                                 SupabaseCompanyProfileRepository, ROOT)
 from .research_pipeline import ResearchPipeline
 from .research_context_repository import SupabaseResearchContextRepository
 from .web_pipeline import WebAnalysisPipeline
@@ -36,7 +43,7 @@ class ServiceSettings:
         self.fixture_mode = _enabled(environ.get("ML_FIXTURE_MODE"))
         self.local_dev_mode = _enabled(environ.get("ML_LOCAL_DEV_MODE"))
         self.service_token = environ.get("ML_SERVICE_TOKEN") or None
-        self.persist_analysis_jobs = _enabled(environ.get("ML_PERSIST_ANALYSIS_JOBS", "true"))
+        self.callback = CallbackSettings.from_environment(environ)
         self.evidence_cache = Path(environ.get("ML_EVIDENCE_CACHE") or
                                    Path(__file__).resolve().parents[1] / ".cache" / "web")
 
@@ -46,7 +53,7 @@ def create_app(*, settings: ServiceSettings | None = None,
                news_provider=None, document_fetcher=None, evidence_store=None,
                research_pipeline: ResearchPipeline | None = None,
                web_pipeline: WebAnalysisPipeline | None = None,
-               job_repository=None) -> FastAPI:
+               callback_client=None, chat_service=None) -> FastAPI:
     settings = settings or ServiceSettings()
     if pipeline is None and settings.fixture_mode:
         repository = JsonCompanyProfileRepository(
@@ -73,53 +80,85 @@ def create_app(*, settings: ServiceSettings | None = None,
 
     @app.post("/internal/analyze", response_model=AnalysisResult)
     def internal_analyze(body: AnalysisRequest, _authorized: None = Depends(authorize)):
-        if settings.fixture_mode:
-            if pipeline is None:
-                raise HTTPException(status_code=503, detail="fixture pipeline is disabled")
-            return pipeline.analyze(body)
-        if web_pipeline is not None:
-            return run_live(web_pipeline, body)
-        if pipeline is not None:
+        if not settings.fixture_mode and pipeline is not None and web_pipeline is None:
             raise HTTPException(status_code=503, detail="fixture pipeline is disabled")
-        repository = SupabaseCompanyProfileRepository.from_env()
-        context_repository = SupabaseResearchContextRepository(repository.engine)
-        try:
-            model = GatewayClient(ModelSettings.from_environment())
-            research = ResearchPipeline(repository, model, news_provider or TavilySearchProvider(),
-                                        document_fetcher or HTTPDocumentFetcher(), store)
-            return run_live(WebAnalysisPipeline(research, context_repository), body,
-                            SupabaseAnalysisJobRepository(repository.engine))
-        finally:
-            repository.close()
 
-    def run_live(runner, body, default_jobs=None):
-        if not settings.persist_analysis_jobs:
-            return runner.analyze(body)
-        jobs = job_repository or default_jobs
-        owns_jobs = jobs is None
+        def run(on_event):
+            if settings.fixture_mode:
+                return pipeline.analyze(body, on_event=on_event)
+            if web_pipeline is not None:
+                return web_pipeline.analyze(body, on_event=on_event)
+            repository = SupabaseCompanyProfileRepository.from_env()
+            try:
+                model = GatewayClient(ModelSettings.from_environment())
+                research = ResearchPipeline(repository, model, news_provider or TavilySearchProvider(),
+                                            document_fetcher or HTTPDocumentFetcher(), store)
+                runner = WebAnalysisPipeline(research, SupabaseResearchContextRepository(repository.engine))
+                return runner.analyze(body, on_event=on_event)
+            finally:
+                repository.close()
+
+        callback = callback_client
+        owns_callback = False
         try:
-            jobs = jobs or SupabaseAnalysisJobRepository.from_env()
-            return analyze_and_save(runner, body, jobs)
-        except AnalysisJobConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except AnalysisJobPermissionError as exc:
+            if callback is None and settings.callback.enabled:
+                callback = BackendCallbackClient(settings.callback)
+                owns_callback = True
+            return analyze_with_callback(body, run, callback)
+        except CallbackError as exc:
             raise HTTPException(status_code=503, detail={
-                "code": "analysis_jobs_permission_denied", "message": str(exc),
-                "job_id": str(body.job_id),
-            }) from exc
-        except AnalysisJobStoreError as exc:
-            raise HTTPException(status_code=503, detail={
-                "code": "analysis_jobs_persistence_failed", "message": str(exc),
+                "code": "backend_callback_failed", "message": str(exc),
                 "job_id": str(body.job_id),
             }) from exc
         finally:
-            if owns_jobs and jobs is not None:
-                jobs.close()
+            if owns_callback:
+                callback.close()
+
+    @app.post("/internal/analyze-company", response_model=AnalysisResult)
+    def internal_analyze_company(body: CompanyAnalysisInput, _authorized: None = Depends(authorize)):
+        try:
+            return _analyze_company(body, fixture_mode=settings.fixture_mode,
+                                    callback_settings=settings.callback, callback_client=callback_client,
+                                    evidence_cache=settings.evidence_cache)
+        except CompanyNotFound as exc:
+            raise HTTPException(status_code=404, detail="company not found") from exc
+        except AmbiguousCompanyIdentity as exc:
+            raise HTTPException(status_code=409, detail="ambiguous company identity") from exc
+        except ProfileNotPrepared as exc:
+            raise HTTPException(status_code=409, detail="company profile is not prepared") from exc
+        except ProfileStoreUnavailable as exc:
+            raise HTTPException(status_code=503, detail="company profile store unavailable") from exc
+        except CallbackError as exc:
+            raise HTTPException(status_code=503, detail={
+                "code": "backend_callback_failed", "message": str(exc),
+                "job_id": str(body.job_id) if body.job_id else None,
+            }) from exc
 
     @app.post("/internal/news/search")
     def internal_news_search(body: SearchTask, _authorized: None = Depends(authorize)):
         return search_news(body, provider=news_provider or TavilySearchProvider(),
                            fetcher=document_fetcher or HTTPDocumentFetcher(), store=store)
+
+    @app.post("/internal/chat", response_model=ChatResponse)
+    def internal_chat(body: ChatRequest, _authorized: None = Depends(authorize)):
+        try:
+            if chat_service is not None:
+                return chat_service.answer(body)
+            return answer_analysis_question(body.job_id, body.message,
+                                            history=[t.model_dump() for t in body.history])
+        except SessionNotFound as exc:
+            raise HTTPException(404, detail={"code": "session_not_found"}) from exc
+        except SessionNotReady as exc:
+            raise HTTPException(409, detail={"code": "session_not_ready", "message": str(exc)}) from exc
+        except ChatContextTooLarge as exc:
+            raise HTTPException(413, detail={"code": "chat_context_too_large"}) from exc
+        except (SessionStoreUnavailable, ProfileStoreUnavailable) as exc:
+            raise HTTPException(503, detail={"code": "session_store_unavailable",
+                                "message": "Check backend result endpoint; in supabase mode check SELECT permission"}) from exc
+        except ModelFormatError as exc:
+            raise HTTPException(502, detail={"code": "chat_answer_invalid"}) from exc
+        except (ModelError, BudgetExceeded) as exc:
+            raise HTTPException(503, detail={"code": "chat_model_unavailable"}) from exc
 
     @app.post("/internal/research", response_model=CompanyResearchContext)
     def internal_research(body: AnalysisRequest, _authorized: None = Depends(authorize)):

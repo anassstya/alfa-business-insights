@@ -56,6 +56,22 @@ class ProfileTests(unittest.TestCase):
         with self.assertRaises(ProfileNotPrepared):
             self.repo({"U_1": [7], "U_2": [9]}).get_company_profile("U_2")
 
+    def test_resolve_numeric_and_synthetic_identity(self):
+        local = self.repo()
+        self.assertEqual(local.resolve_company_identity(7), ("U_1", 7))
+        self.assertEqual(local.resolve_company_identity("U_1"), ("U_1", 7))
+        with self.assertRaises(CompanyNotFound):
+            local.resolve_company_identity(999)
+        engine = MagicMock()
+        conn = engine.connect.return_value.__enter__.return_value
+        conn.execute.return_value.all.return_value = [(7, "U_1")]
+        remote = SupabaseCompanyProfileRepository(engine)
+        self.assertEqual(remote.resolve_company_identity(7), ("U_1", 7))
+        self.assertEqual(conn.execute.call_args.args[1], {"value": 7})
+        conn.execute.return_value.all.return_value = [(7, "U_1"), (8, "U_1")]
+        with self.assertRaises(AmbiguousCompanyIdentity):
+            remote.resolve_company_identity("U_1")
+
     def test_incomplete_and_invalid(self):
         for content, exception in [
             ({"company_id": "U_1", "__base_context_upload_chunks__": {}}, ProfileNotPrepared),
