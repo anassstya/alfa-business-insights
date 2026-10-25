@@ -1,0 +1,14 @@
+[
+  {
+    "company_id": "U_EXAMPLE",
+    "base_information": {
+      "profile": {"industry": {"okved_code": null}, "geography": {"region": null}},
+      "banking": {"products": {"loans": null}},
+      "market_position": {},
+      "corporate_group": {},
+      "payments": {},
+      "person_links": {},
+      "data_quality": {"note": "Demonstration profile; all unknown business facts remain unknown"}
+    }
+  }
+]

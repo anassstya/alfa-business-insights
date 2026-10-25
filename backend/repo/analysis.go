@@ -1,10 +1,11 @@
 package repo
 
 import (
-	"alfa-business-insights/backend/model"
 	"context"
 	"encoding/json"
 	"errors"
+
+	"alfa-business-insights/backend/model"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -87,6 +88,8 @@ func (r *AnalysisRepository) Create(ctx context.Context, job model.AnalysisJob) 
 
 func (r *AnalysisRepository) GetByID(ctx context.Context, jobID string) (*model.AnalysisJob, error) {
 	var job model.AnalysisJob
+	var status string
+	var stage *string
 
 	err := r.db.QueryRow(ctx, `
 		SELECT
@@ -109,8 +112,8 @@ func (r *AnalysisRepository) GetByID(ctx context.Context, jobID string) (*model.
 		&job.DemoUserID,
 		&job.Role,
 		&job.Goal,
-		&job.Status,
-		&job.Stage,
+		&status,
+		&stage,
 		&job.Result,
 		&job.ErrorMessage,
 		&job.CreatedAt,
@@ -123,6 +126,13 @@ func (r *AnalysisRepository) GetByID(ctx context.Context, jobID string) (*model.
 
 	if err != nil {
 		return nil, err
+	}
+
+	job.Status = model.AnalysisStatus(status)
+
+	if stage != nil {
+		value := model.AnalysisStage(*stage)
+		job.Stage = &value
 	}
 
 	return &job, nil
@@ -151,18 +161,27 @@ func (r *AnalysisRepository) ListByDemoUserID(ctx context.Context, demoUserID in
 
 	for rows.Next() {
 		var job model.AnalysisJobSummary
+		var status string
+		var stage *string
 
 		err := rows.Scan(
 			&job.ID,
 			&job.CompanyID,
 			&job.Role,
 			&job.Goal,
-			&job.Status,
-			&job.Stage,
+			&status,
+			&stage,
 			&job.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
+		}
+
+		job.Status = model.AnalysisStatus(status)
+
+		if stage != nil {
+			value := model.AnalysisStage(*stage)
+			job.Stage = &value
 		}
 
 		jobs = append(jobs, job)
@@ -175,24 +194,56 @@ func (r *AnalysisRepository) ListByDemoUserID(ctx context.Context, demoUserID in
 	return jobs, nil
 }
 
-func (r *AnalysisRepository) UpdateFromEvent(ctx context.Context, jobID string, status string, stage *string, result json.RawMessage, errorMessage *string) (bool, error) {
+func (r *AnalysisRepository) UpdateFromEvent(
+	ctx context.Context,
+	jobID string,
+	status model.AnalysisStatus,
+	stage *model.AnalysisStage,
+	result json.RawMessage,
+	errorMessage *string,
+) (bool, error) {
 	var id string
+
+	var stageValue any
+	if stage != nil {
+		stageValue = string(*stage)
+	}
+
+	var resultValue any
+	if len(result) > 0 {
+		resultValue = string(result)
+	}
 
 	err := r.db.QueryRow(ctx, `
 		UPDATE analysis_jobs
 		SET
-			status = $2,
-			stage = COALESCE($3, stage),
-			result = COALESCE($4::jsonb, result),
-			error_message = COALESCE($5, error_message),
-			updated_at = NOW()
+			status = CASE
+				WHEN status IN ('completed', 'failed') THEN status
+				ELSE $2::text
+			END,
+			stage = CASE
+				WHEN status IN ('completed', 'failed') THEN stage
+				ELSE COALESCE($3::text, stage)
+			END,
+			result = CASE
+				WHEN status IN ('completed', 'failed') THEN result
+				ELSE COALESCE($4::jsonb, result)
+			END,
+			error_message = CASE
+				WHEN status IN ('completed', 'failed') THEN error_message
+				ELSE COALESCE($5::text, error_message)
+			END,
+			updated_at = CASE
+				WHEN status IN ('completed', 'failed') THEN updated_at
+				ELSE NOW()
+			END
 		WHERE id = $1::uuid
 		RETURNING id::text
 	`,
 		jobID,
-		status,
-		stage,
-		result,
+		string(status),
+		stageValue,
+		resultValue,
 		errorMessage,
 	).Scan(&id)
 
