@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "BankView": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": "unavailable",
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "report_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report At"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "title": "BankView",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "insight_id": {
+      "maxLength": 80,
+      "title": "Insight Id",
+      "type": "string"
+    },
+    "event": {
+      "maxLength": 1000,
+      "title": "Event",
+      "type": "string"
+    },
+    "company_relevance": {
+      "maxLength": 1500,
+      "title": "Company Relevance",
+      "type": "string"
+    },
+    "role_relevance": {
+      "maxLength": 1500,
+      "title": "Role Relevance",
+      "type": "string"
+    },
+    "impact_chain": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Impact Chain",
+      "type": "array"
+    },
+    "bank_view": {
+      "$ref": "#/$defs/BankView"
+    },
+    "risks": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Risks",
+      "type": "array"
+    },
+    "opportunities": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Opportunities",
+      "type": "array"
+    },
+    "suggested_actions": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Suggested Actions",
+      "type": "array"
+    },
+    "assumptions": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 15,
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "uncertainty": {
+      "maxLength": 1000,
+      "title": "Uncertainty",
+      "type": "string"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 12,
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "feature_refs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Feature Refs",
+      "type": "array"
+    },
+    "rank": {
+      "exclusiveMinimum": 0,
+      "title": "Rank",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "insight_id",
+    "event",
+    "company_relevance",
+    "role_relevance",
+    "impact_chain",
+    "uncertainty",
+    "evidence_refs",
+    "feature_refs",
+    "rank"
+  ],
+  "title": "Insight",
+  "type": "object"
+}

@@ -1,0 +1,147 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "evidence_id": {
+      "maxLength": 80,
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "document_id": {
+      "maxLength": 80,
+      "title": "Document Id",
+      "type": "string"
+    },
+    "source_kind": {
+      "enum": [
+        "news",
+        "official_release",
+        "bank_research",
+        "fixture"
+      ],
+      "title": "Source Kind",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 500,
+      "title": "Title",
+      "type": "string"
+    },
+    "publisher": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Publisher"
+    },
+    "url": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Url"
+    },
+    "published_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Published At"
+    },
+    "retrieved_at": {
+      "format": "date-time",
+      "title": "Retrieved At",
+      "type": "string"
+    },
+    "event_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Event At"
+    },
+    "excerpt": {
+      "maxLength": 4000,
+      "title": "Excerpt",
+      "type": "string"
+    },
+    "content_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Hash",
+      "type": "string"
+    },
+    "page_number": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Page Number"
+    },
+    "date_status": {
+      "enum": [
+        "known",
+        "unknown",
+        "archived"
+      ],
+      "title": "Date Status",
+      "type": "string"
+    },
+    "content_status": {
+      "enum": [
+        "full_text",
+        "excerpt_only",
+        "fetch_failed"
+      ],
+      "title": "Content Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "document_id",
+    "source_kind",
+    "title",
+    "retrieved_at",
+    "excerpt",
+    "content_hash",
+    "date_status",
+    "content_status"
+  ],
+  "title": "EvidenceRecord",
+  "type": "object"
+}

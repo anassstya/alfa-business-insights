@@ -1,0 +1,934 @@
+{
+  "$defs": {
+    "BankView": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": "unavailable",
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "report_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Report At"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "title": "BankView",
+      "type": "object"
+    },
+    "BaseCompanyProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "company_id": {
+          "maxLength": 128,
+          "pattern": "^U_[A-Za-z0-9_]+$",
+          "title": "Company Id",
+          "type": "string"
+        },
+        "base_information": {
+          "$ref": "#/$defs/BaseInformation"
+        },
+        "source": {
+          "enum": [
+            "json",
+            "supabase"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "source_updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Updated At"
+        },
+        "profile_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Profile Hash",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "company_id",
+        "base_information",
+        "source",
+        "profile_hash"
+      ],
+      "title": "BaseCompanyProfile",
+      "type": "object"
+    },
+    "BaseInformation": {
+      "additionalProperties": true,
+      "properties": {
+        "profile": {
+          "additionalProperties": true,
+          "title": "Profile",
+          "type": "object"
+        },
+        "banking": {
+          "additionalProperties": true,
+          "title": "Banking",
+          "type": "object"
+        },
+        "market_position": {
+          "additionalProperties": true,
+          "title": "Market Position",
+          "type": "object"
+        },
+        "corporate_group": {
+          "additionalProperties": true,
+          "title": "Corporate Group",
+          "type": "object"
+        },
+        "payments": {
+          "additionalProperties": true,
+          "title": "Payments",
+          "type": "object"
+        },
+        "person_links": {
+          "additionalProperties": true,
+          "title": "Person Links",
+          "type": "object"
+        },
+        "data_quality": {
+          "additionalProperties": true,
+          "title": "Data Quality",
+          "type": "object"
+        }
+      },
+      "required": [
+        "profile",
+        "banking",
+        "market_position",
+        "corporate_group",
+        "payments",
+        "person_links",
+        "data_quality"
+      ],
+      "title": "BaseInformation",
+      "type": "object"
+    },
+    "CompanyResearchContext": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "company_id": {
+          "maxLength": 128,
+          "pattern": "^U_[A-Za-z0-9_]+$",
+          "title": "Company Id",
+          "type": "string"
+        },
+        "profile_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Profile Hash",
+          "type": "string"
+        },
+        "as_of": {
+          "format": "date-time",
+          "title": "As Of",
+          "type": "string"
+        },
+        "window": {
+          "$ref": "#/$defs/ResearchWindow"
+        },
+        "exposures": {
+          "items": {
+            "$ref": "#/$defs/Exposure"
+          },
+          "maxItems": 50,
+          "title": "Exposures",
+          "type": "array"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/SearchTask"
+          },
+          "maxItems": 6,
+          "title": "Tasks",
+          "type": "array"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRecord"
+          },
+          "maxItems": 48,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "coverage": {
+          "additionalProperties": true,
+          "title": "Coverage",
+          "type": "object"
+        },
+        "gaps": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Gaps",
+          "type": "array"
+        },
+        "versions": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Versions",
+          "type": "object"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        }
+      },
+      "required": [
+        "company_id",
+        "profile_hash",
+        "as_of",
+        "window"
+      ],
+      "title": "CompanyResearchContext",
+      "type": "object"
+    },
+    "EvidenceRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "evidence_id": {
+          "maxLength": 80,
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "document_id": {
+          "maxLength": 80,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "news",
+            "official_release",
+            "bank_research",
+            "fixture"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "title": "Title",
+          "type": "string"
+        },
+        "publisher": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publisher"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published At"
+        },
+        "retrieved_at": {
+          "format": "date-time",
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "event_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event At"
+        },
+        "excerpt": {
+          "maxLength": 4000,
+          "title": "Excerpt",
+          "type": "string"
+        },
+        "content_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "page_number": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page Number"
+        },
+        "date_status": {
+          "enum": [
+            "known",
+            "unknown",
+            "archived"
+          ],
+          "title": "Date Status",
+          "type": "string"
+        },
+        "content_status": {
+          "enum": [
+            "full_text",
+            "excerpt_only",
+            "fetch_failed"
+          ],
+          "title": "Content Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "document_id",
+        "source_kind",
+        "title",
+        "retrieved_at",
+        "excerpt",
+        "content_hash",
+        "date_status",
+        "content_status"
+      ],
+      "title": "EvidenceRecord",
+      "type": "object"
+    },
+    "Exposure": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "exposure_id": {
+          "maxLength": 80,
+          "title": "Exposure Id",
+          "type": "string"
+        },
+        "factor": {
+          "maxLength": 160,
+          "title": "Factor",
+          "type": "string"
+        },
+        "feature_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Feature Refs",
+          "type": "array"
+        },
+        "observed_values": {
+          "additionalProperties": true,
+          "title": "Observed Values",
+          "type": "object"
+        },
+        "rule_id": {
+          "maxLength": 80,
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "rule_version": {
+          "maxLength": 40,
+          "title": "Rule Version",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1200,
+          "title": "Reason",
+          "type": "string"
+        },
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "missing_fields": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Missing Fields",
+          "type": "array"
+        },
+        "priority": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Priority",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "exposure_id",
+        "factor",
+        "feature_refs",
+        "rule_id",
+        "rule_version",
+        "reason",
+        "priority"
+      ],
+      "title": "Exposure",
+      "type": "object"
+    },
+    "Insight": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "insight_id": {
+          "maxLength": 80,
+          "title": "Insight Id",
+          "type": "string"
+        },
+        "event": {
+          "maxLength": 1000,
+          "title": "Event",
+          "type": "string"
+        },
+        "company_relevance": {
+          "maxLength": 1500,
+          "title": "Company Relevance",
+          "type": "string"
+        },
+        "role_relevance": {
+          "maxLength": 1500,
+          "title": "Role Relevance",
+          "type": "string"
+        },
+        "impact_chain": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Impact Chain",
+          "type": "array"
+        },
+        "bank_view": {
+          "$ref": "#/$defs/BankView"
+        },
+        "risks": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Risks",
+          "type": "array"
+        },
+        "opportunities": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Opportunities",
+          "type": "array"
+        },
+        "suggested_actions": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Suggested Actions",
+          "type": "array"
+        },
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 15,
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "uncertainty": {
+          "maxLength": 1000,
+          "title": "Uncertainty",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "feature_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Feature Refs",
+          "type": "array"
+        },
+        "rank": {
+          "exclusiveMinimum": 0,
+          "title": "Rank",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "insight_id",
+        "event",
+        "company_relevance",
+        "role_relevance",
+        "impact_chain",
+        "uncertainty",
+        "evidence_refs",
+        "feature_refs",
+        "rank"
+      ],
+      "title": "Insight",
+      "type": "object"
+    },
+    "ResearchWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "format": "date-time",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "format": "date-time",
+          "title": "End",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "ResearchWindow",
+      "type": "object"
+    },
+    "SearchTask": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "task_id": {
+          "maxLength": 80,
+          "title": "Task Id",
+          "type": "string"
+        },
+        "exposure_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Exposure Ids",
+          "type": "array"
+        },
+        "question": {
+          "maxLength": 500,
+          "title": "Question",
+          "type": "string"
+        },
+        "query": {
+          "maxLength": 300,
+          "title": "Query",
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "news",
+            "official_release",
+            "bank_research",
+            "fixture"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "filters": {
+          "additionalProperties": true,
+          "title": "Filters",
+          "type": "object"
+        },
+        "priority": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "reason": {
+          "maxLength": 700,
+          "title": "Reason",
+          "type": "string"
+        },
+        "expected_evidence": {
+          "maxLength": 700,
+          "title": "Expected Evidence",
+          "type": "string"
+        },
+        "max_results": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Max Results",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "task_id",
+        "exposure_ids",
+        "question",
+        "query",
+        "source_kind",
+        "priority",
+        "reason",
+        "expected_evidence",
+        "max_results"
+      ],
+      "title": "SearchTask",
+      "type": "object"
+    },
+    "StageEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "job_id": {
+          "format": "uuid",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "exclusiveMinimum": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "stage": {
+          "enum": [
+            "loading_profile",
+            "mapping_exposures",
+            "planning",
+            "retrieving",
+            "analyzing",
+            "validating",
+            "completed"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "started",
+            "completed",
+            "failed",
+            "skipped"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 500,
+          "title": "Summary",
+          "type": "string"
+        },
+        "counters": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Counters",
+          "type": "object"
+        }
+      },
+      "required": [
+        "job_id",
+        "run_id",
+        "seq",
+        "stage",
+        "state",
+        "at",
+        "summary"
+      ],
+      "title": "StageEvent",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "job_id": {
+      "format": "uuid",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "company_id": {
+      "maxLength": 128,
+      "pattern": "^U_[A-Za-z0-9_]+$",
+      "title": "Company Id",
+      "type": "string"
+    },
+    "company_row_id": {
+      "exclusiveMinimum": 0,
+      "title": "Company Row Id",
+      "type": "integer"
+    },
+    "role": {
+      "enum": [
+        "accountant",
+        "ceo",
+        "cfo",
+        "decision_maker",
+        "other_c_level",
+        "owner",
+        "treasurer"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "goal": {
+      "anyOf": [
+        {
+          "maxLength": 1000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Goal"
+    },
+    "as_of": {
+      "format": "date-time",
+      "title": "As Of",
+      "type": "string"
+    },
+    "outcome": {
+      "enum": [
+        "ok",
+        "partial",
+        "no_relevant_evidence",
+        "failed"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "insights": {
+      "items": {
+        "$ref": "#/$defs/Insight"
+      },
+      "maxItems": 5,
+      "title": "Insights",
+      "type": "array"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/EvidenceRecord"
+      },
+      "maxItems": 48,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "profile_snapshot": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BaseCompanyProfile"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "research_context": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CompanyResearchContext"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Warnings",
+      "type": "array"
+    },
+    "trace": {
+      "items": {
+        "$ref": "#/$defs/StageEvent"
+      },
+      "maxItems": 100,
+      "title": "Trace",
+      "type": "array"
+    },
+    "usage": {
+      "additionalProperties": true,
+      "title": "Usage",
+      "type": "object"
+    },
+    "versions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Versions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "job_id",
+    "run_id",
+    "company_id",
+    "company_row_id",
+    "role",
+    "as_of",
+    "outcome"
+  ],
+  "title": "AnalysisResult",
+  "type": "object"
+}

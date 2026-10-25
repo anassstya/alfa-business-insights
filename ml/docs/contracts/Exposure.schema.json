@@ -1,0 +1,82 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "exposure_id": {
+      "maxLength": 80,
+      "title": "Exposure Id",
+      "type": "string"
+    },
+    "factor": {
+      "maxLength": 160,
+      "title": "Factor",
+      "type": "string"
+    },
+    "feature_refs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Feature Refs",
+      "type": "array"
+    },
+    "observed_values": {
+      "additionalProperties": true,
+      "title": "Observed Values",
+      "type": "object"
+    },
+    "rule_id": {
+      "maxLength": 80,
+      "title": "Rule Id",
+      "type": "string"
+    },
+    "rule_version": {
+      "maxLength": 40,
+      "title": "Rule Version",
+      "type": "string"
+    },
+    "reason": {
+      "maxLength": 1200,
+      "title": "Reason",
+      "type": "string"
+    },
+    "assumptions": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "missing_fields": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Missing Fields",
+      "type": "array"
+    },
+    "priority": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Priority",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "exposure_id",
+    "factor",
+    "feature_refs",
+    "rule_id",
+    "rule_version",
+    "reason",
+    "priority"
+  ],
+  "title": "Exposure",
+  "type": "object"
+}

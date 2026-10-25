@@ -15,18 +15,16 @@ be registered as agent tools. No method accepts arbitrary SQL.
 
 from __future__ import annotations
 
-import os
 from copy import deepcopy
 from datetime import date, datetime, time
 from decimal import Decimal
-from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
-from sqlalchemy import URL, Engine, MetaData, Table, create_engine, inspect, select
+from sqlalchemy import Engine, MetaData, Table, inspect, select
+
+from ml.src.profile_repository import SupabaseSettings
 
 
-ROOT = Path(__file__).resolve().parents[2]
 TABLE_DESCRIPTIONS = {
     "companies": "Профили компаний; synthetic_u — идентификатор компании, group_id — идентификатор группы.",
     "person_company_links": "Связи людей (synthetic_f) с компаниями (synthetic_u); роль человека не указана.",
@@ -64,21 +62,8 @@ class DatabaseTools:
 
     @classmethod
     def from_env(cls) -> DatabaseTools:
-        """Create tools using POSTGRES_* settings from the root .env file."""
-        load_dotenv(ROOT / ".env", override=False)
-        required = ("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB")
-        missing = [name for name in required if not os.getenv(name)]
-        if missing:
-            raise RuntimeError("Missing database settings: " + ", ".join(missing))
-        url = URL.create(
-            "postgresql+psycopg",
-            username=os.environ["POSTGRES_USER"],
-            password=os.environ["POSTGRES_PASSWORD"],
-            host=os.getenv("POSTGRES_HOST", "localhost"),
-            port=int(os.getenv("POSTGRES_PORT", "15432")),
-            database=os.environ["POSTGRES_DB"],
-        )
-        return cls(create_engine(url, connect_args={"connect_timeout": 5}), owns_engine=True)
+        """Create bounded read tools with the shared explicit remote settings."""
+        return cls(SupabaseSettings().create_engine(), owns_engine=True)
 
     def close(self) -> None:
         """Release the engine created by from_env()."""
