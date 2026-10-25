@@ -5,7 +5,6 @@ import type { TaskTone } from "../model/data";
 const WHITE_60 = 'rgba(255, 255, 255, .6)';
 const WHITE_45 = 'rgba(255, 255, 255, .45)';
 
-/** Тёмный блок с балансом — фон с красным свечением, как в Альфа-Бизнес Онлайн */
 const OverviewRoot = styled.section`
   position: relative;
   overflow: hidden;
@@ -273,7 +272,6 @@ const PromoText = styled.div`
   color: rgba(255, 255, 255, .7);
 `
 
-/** Иллюстрация «умной карты»: наклонённая металлическая карта с красным торцом и шестигранный бейдж */
 const CardArt = styled.div`
   position: absolute;
   right: -28px;

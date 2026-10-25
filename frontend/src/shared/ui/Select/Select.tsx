@@ -23,13 +23,9 @@ interface SelectProps<T extends string | number> {
   disabled?: boolean;
   emptyText?: string;
   fullWidth?: boolean;
-  /** Подпись выбранного значения, если его опции ещё нет среди подгруженных */
   selectedLabel?: string;
-  /** Ленивая подгрузка: есть ли ещё опции на сервере */
   hasMore?: boolean;
-  /** Ленивая подгрузка: идёт загрузка следующей порции */
   loadingMore?: boolean;
-  /** Вызывается, когда пользователь докрутил список до конца */
   onLoadMore?(): void;
 }
 
@@ -71,8 +67,6 @@ const Select = <T extends string | number>({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen])
 
-  // Ленивая подгрузка: строка «Загрузка…» в конце списка попала в область видимости — просим следующую порцию.
-  // Observer пересоздаётся после каждой порции, чтобы догрузить ещё, если строка всё ещё видна.
   useEffect(() => {
     const target = loadMoreRef.current;
     if (!isOpen || !hasMore || loadingMore || !target || !onLoadMore) return;
@@ -86,7 +80,6 @@ const Select = <T extends string | number>({
     return () => observer.disconnect();
   }, [isOpen, hasMore, loadingMore, onLoadMore, options.length])
 
-  // при навигации стрелками держим подсвеченную опцию в видимой области — это же докручивает до подгрузки
   useEffect(() => {
     if (!isOpen || highlighted < 0) return;
 

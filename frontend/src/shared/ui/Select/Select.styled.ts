@@ -139,7 +139,6 @@ const OptionDescription = styled.span`
   color: ${({ theme }) => theme.colors.secondary.textSecondary};
 `
 
-/** Последняя строка списка: при её появлении в видимой области подгружается следующая порция */
 const LoadMoreRow = styled.li`
   padding: 10px 12px;
   font-size: 14px;

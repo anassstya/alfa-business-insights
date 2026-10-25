@@ -1,6 +1,5 @@
 import styled from "styled-components";
 
-/** Цвета интерфейса Альфа-Бизнес Онлайн, которых нет в общей теме */
 const ALFA = {
   pageBg: '#F3F4F5',
   surface: '#FFFFFF',
@@ -16,10 +15,6 @@ const ALFA = {
   control: '#E7E8EA',
 };
 
-/**
- * Макет главной Альфа-Бизнес Онлайн. Вся страница статичная —
- * без ссылок, кнопок и hover-состояний.
- */
 const PageRoot = styled.div`
   display: grid;
   grid-template-columns: 216px minmax(0, 1fr);
@@ -29,7 +24,6 @@ const PageRoot = styled.div`
   cursor: default;
   -webkit-font-smoothing: antialiased;
 
-  /* глобально задан моноширинный NotoSans — здесь нужен гротеск, как в интерфейсе банка */
   & * {
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     box-sizing: border-box;

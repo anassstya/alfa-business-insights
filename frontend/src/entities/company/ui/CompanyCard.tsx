@@ -37,7 +37,6 @@ const CompanyCard = ({ companyId }: { companyId: number }) => {
         <Title.H4>{getCompanyLabel(company)}</Title.H4>
         <Flex gap="6px" style={{ flexWrap: 'wrap' }}>
           {company.org_type && <Badge>{company.org_type}</Badge>}
-          {/* FIXME(openapi): cl_type — код датасета (на backend всегда 'CLIENT'), человекочитаемого значения в спецификации нет */}
           {company.cl_type && <Badge $variant="accent">{company.okfs_name}</Badge>}
         </Flex>
       </Flex>

@@ -7,7 +7,6 @@ import {
   Story, SummaryRoot, SummitTitle, Tab, Tabs, TabsRow, ViewControls, WidgetCard, WidgetHeader, Widgets,
 } from "./Summary.styled";
 
-/** Кольцо прогресса «2 из 5» */
 const ProgressRing = ({ step, steps }: { step: number, steps: number }) => {
   const circumference = 2 * Math.PI * 6;
 
@@ -29,7 +28,6 @@ const ProgressRing = ({ step, steps }: { step: number, steps: number }) => {
   )
 }
 
-/** Полукруглая шкала риска: серая дуга с засечками и зелёный сегмент «низкий риск» */
 const RiskGauge = () => {
   const ticks = Array.from({ length: 13 }, (_, i) => Math.PI - (Math.PI * i) / 12);
 

@@ -8,7 +8,9 @@ import { Entrypoint, Header } from './widgets';
 import { RoleProvider, SessionProvider } from './entities';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
+// eslint-disable-next-line react-refresh/only-export-components
 const MainPage = lazy(() => import('@/pages/MainPage'))
+// eslint-disable-next-line react-refresh/only-export-components
 const AlfaMainPage = lazy(() => import('@/pages/AlfaMainPage'))
 
 createRoot(document.getElementById('root')!).render(

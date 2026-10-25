@@ -47,7 +47,7 @@ const useAnalysis = <TConnect, TProgress, TComplete, TFail>(job?: string) => {
   useEffect(() => {
     const close = analysisJobEvents(job, { onConnect, onProgress, onComplete, onFail, onError })
 
-    return close()
+    return close
   }, [job, onComplete, onConnect, onError, onFail, onProgress])
 
   const status = useMemo(() => {

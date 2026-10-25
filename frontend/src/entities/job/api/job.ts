@@ -21,10 +21,6 @@ interface Params<TConnect, TProgress, TResult, TFail> {
   onProgress?(data: TProgress, event: MessageEvent<string>): void;
   onComplete?(data: TResult, event: MessageEvent<string>): void;
   onFail?(data: TFail, event: MessageEvent<string>): void;
-  /**
-   * Ошибка соединения. При `closed: false` браузер сам переподключится
-   * (с заголовком Last-Event-ID), при `closed: true` — сдался (например, 404 или 500).
-   */
   onError?(event: Event, closed: boolean): void;
 }
 

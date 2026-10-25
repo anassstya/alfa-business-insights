@@ -1,6 +1,7 @@
 import { Button, Chip, Flex, Modal, Radio, RadioGroup, Select, Text } from "@/shared"
 import { useEffect, useMemo, useState } from "react";
 import { Form, UserCard } from "./Entrypoint.styled";
+import { UsersLoader } from "./UsersLoader";
 import { Controller, useForm } from "react-hook-form";
 import {
   getCompanyDescription, getCompanyLabel, useInfiniteCompanies, useRoleContext, useSession,
@@ -11,7 +12,6 @@ const FORM_VALUE = [{value: 'users', label: 'Пользователь'}, { value
 
 const Entrypoint = () => {
   const [showHelloModal, setHelloModal] = useState(true)
-  // тот же ключ, что в SelectOrganization, — подгруженные страницы общие
   const {
     data: companies, isPending: companiesPending, hasNextPage, isFetchingNextPage, fetchNextPage,
   } = useInfiniteCompanies()
@@ -36,7 +36,7 @@ const Entrypoint = () => {
         userId: undefined,
       }, { shouldTouch: true })
   }, [formType, setValues])
-  const { data: users = []} = useDemoUsers();
+  const { data: users = [], isPending: usersPending } = useDemoUsers();
   const onSubmit = ({companyId , role, userId }: { userId: number, companyId: number, role: string}) => {
     if (role && companyId) {
       setRole(role)
@@ -53,7 +53,8 @@ const Entrypoint = () => {
       <Form onSubmit={handleSubmit(onSubmit)}>
         <Controller control={control} name="userId" render={({ field: { value, onChange }}) => (
           <RadioGroup value={String(value)} onChange={onChange}>
-            {formType === 'users' && users.map(({id, first_name, last_name, synthetic_f }) => (
+            {formType === 'users' && usersPending && <UsersLoader />}
+            {formType === 'users' && !usersPending && users.map(({id, first_name, last_name, synthetic_f }) => (
               <UserCard key={id} onClick={() => {setValues({ userId: id, formType: 'users' }, { shouldTouch: true })}}>
                 <Flex justify="space-between">
                   <Text.S1>{synthetic_f}</Text.S1>

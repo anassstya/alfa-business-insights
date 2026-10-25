@@ -89,7 +89,6 @@ const Avatar = styled.div`
   background: radial-gradient(circle at 50% 38%, #e9c7ad 0 22%, transparent 23%),
     linear-gradient(180deg, #5b6470 0%, #2a2f36 100%);
 
-  /* плечи в пиджаке */
   &::after {
     content: '';
     position: absolute;

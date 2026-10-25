@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react"
+import { useMemo } from "react"
 import {
   getCompanyDescription, getCompanyLabel, useCompany, useInfiniteCompanies, useSession, useUserCompanies,
   type Company,
@@ -13,11 +13,8 @@ const toOption = (company: Company) => ({
 
 const SelectOrganization = () => {
   const { companyId, setCompanyId, userId } = useSession();
-  // FIXME(openapi): поиска по компаниям в API нет — без демопользователя ~85 тыс. компаний
-  // можно только пролистывать, подгружая постранично.
   const allCompanies = useInfiniteCompanies();
   const userCompanies = useUserCompanies(userId);
-  // выбранная компания может быть на ещё не подгруженной странице — подпись берём из кэша
   const { data: selectedCompany } = useCompany(companyId);
 
   const source = userId ? userCompanies : allCompanies;
@@ -34,7 +31,7 @@ const SelectOrganization = () => {
       options={companies.map(toOption)}
       value={companyId}
       selectedLabel={selectedCompany ? getCompanyLabel(selectedCompany) : undefined}
-      onChange={setCompanyId}
+      onChange={v=>setCompanyId(v)}
       loading={source.isPending}
       hasMore={!userId && allCompanies.hasNextPage}
       loadingMore={!userId && allCompanies.isFetchingNextPage}

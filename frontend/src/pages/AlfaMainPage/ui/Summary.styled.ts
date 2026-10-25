@@ -220,7 +220,6 @@ const Stories = styled.div`
   }
 `
 
-/** Карточка-сторис с красной рамкой «непросмотрено» */
 const Story = styled.div<{ $variant: 'money' | 'summit' }>`
   position: relative;
   overflow: hidden;

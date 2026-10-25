@@ -7,11 +7,6 @@ interface UserWithCompanies {
   companies: Company[];
 }
 
-/**
- * GET /api/v1/demo/users + GET /api/v1/demo/users/{id}/companies для каждого пользователя.
- * FIXME(openapi): в API нет эндпоинта, отдающего пользователей сразу с компаниями, —
- * получается N+1 запрос (пока демопользователей трое, это терпимо).
- */
 const useUsersCompanies = () =>
   useQuery({
     queryKey: ['users', 'companies'],
