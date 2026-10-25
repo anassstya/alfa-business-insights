@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"unicode/utf8"
@@ -11,9 +12,10 @@ import (
 )
 
 var (
-	ErrInvalidInput    = errors.New("invalid input")
-	ErrInvalidRole     = errors.New("invalid role")
-	ErrCompanyNotFound = errors.New("company not found or unavailable")
+	ErrInvalidInput     = errors.New("invalid input")
+	ErrInvalidRole      = errors.New("invalid role")
+	ErrCompanyNotFound  = errors.New("company not found or unavailable")
+	ErrAnalysisNotFound = errors.New("analysis not found")
 )
 
 type AnalysisService struct {
@@ -60,4 +62,57 @@ func (s *AnalysisService) PrepareAnalysis(ctx context.Context, companyID int64, 
 	}
 
 	return syntheticU, nil
+}
+
+func (s *AnalysisService) ListAnalysisJobs(ctx context.Context, demoUserID int64) ([]model.AnalysisJobSummary, error) {
+	if demoUserID <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	return s.repo.ListByDemoUserID(ctx, demoUserID)
+}
+
+func (s *AnalysisService) GetAnalysisJob(ctx context.Context, jobID string) (*model.AnalysisJob, error) {
+	if strings.TrimSpace(jobID) == "" {
+		return nil, ErrInvalidInput
+	}
+
+	job, err := s.repo.GetByID(ctx, jobID)
+	if err != nil {
+		return nil, err
+	}
+
+	if job == nil {
+		return nil, ErrAnalysisNotFound
+	}
+
+	return job, nil
+}
+
+func (s *AnalysisService) UpdateAnalysisFromEvent(ctx context.Context, jobID string, status string, stage *string, result json.RawMessage, errorMessage *string) error {
+	if strings.TrimSpace(jobID) == "" || strings.TrimSpace(status) == "" {
+		return ErrInvalidInput
+	}
+
+	if len(result) > 0 && !json.Valid(result) {
+		return ErrInvalidInput
+	}
+
+	found, err := s.repo.UpdateFromEvent(
+		ctx,
+		jobID,
+		status,
+		stage,
+		result,
+		errorMessage,
+	)
+	if err != nil {
+		return err
+	}
+
+	if !found {
+		return ErrAnalysisNotFound
+	}
+
+	return nil
 }

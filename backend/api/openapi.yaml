@@ -1,4 +1,3 @@
-
 openapi: 3.0.3
 
 info:
@@ -205,7 +204,6 @@ paths:
                           type: string
                           enum: [CLIENT]
                           description: Статус компании — действующий клиент
-
 
               example:
                 companies:
@@ -483,7 +481,7 @@ paths:
         Запускает асинхронное формирование бизнес-инсайтов
         для выбранной компании с учетом указанной роли.
         Если передан demo_user_id, дополнительно проверяется связь
-        компании с демопользователем
+        компании с демопользователем.
 
       parameters:
         - name: companyID
@@ -516,7 +514,7 @@ paths:
                   maxLength: 1000
                   description: Необязательная цель анализа, указанная пользователем
                   example: Оценить влияние ключевой ставки на бизнес
-                  
+
                 role:
                   type: string
                   description: Роль пользователя, для которой формируется аналитика
@@ -560,3 +558,445 @@ paths:
 
         '503':
           description: Не удалось передать задачу на обработку
+
+  /api/v1/demo/users/{id}/analysis/jobs:
+    get:
+      tags:
+        - Analysis
+      summary: Получить историю анализов демопользователя
+      description: >
+        Возвращает все задачи анализа выбранного демопользователя,
+        отсортированные от новых к старым.
+        Анализы без demo_user_id в историю пользователя не входят.
+      operationId: getDemoUserAnalysisJobs
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID демопользователя
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+
+      responses:
+        '200':
+          description: История анализов пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - jobs
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AnalysisJobSummary'
+
+        '400':
+          description: Некорректный ID пользователя
+
+        '404':
+          description: Пользователь не найден
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/analysis/jobs/{jobID}:
+    get:
+      tags:
+        - Analysis
+      summary: Получить анализ по ID
+      description: >
+        Возвращает полную информацию о задаче анализа,
+        включая компанию, роль, цель, текущий статус,
+        этап выполнения, результат и возможную ошибку.
+      operationId: getAnalysisJobByID
+
+      parameters:
+        - $ref: '#/components/parameters/JobID'
+
+      responses:
+        '200':
+          description: Информация о задаче анализа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJob'
+
+        '400':
+          description: Некорректный job_id
+
+        '403':
+          description: Нет доступа к задаче
+
+        '404':
+          description: Задача анализа не найдена
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/analysis/jobs/{jobID}/events:
+    get:
+      tags:
+        - Analysis
+      summary: Получать обновления анализа через SSE
+      description: >
+        Открывает SSE-соединение для получения обновлений
+        состояния анализа в реальном времени.
+        При подключении frontend получает текущее состояние задачи.
+        Новые события поступают по мере выполнения анализа.
+      operationId: streamAnalysisEvents
+
+      parameters:
+        - $ref: '#/components/parameters/JobID'
+
+      responses:
+        '200':
+          description: Поток событий анализа
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+        '400':
+          description: Некорректный job_id
+
+        '403':
+          description: Нет доступа к задаче
+
+        '404':
+          description: Задача анализа не найдена
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/internal/analysis/events:
+    post:
+      tags:
+        - Analysis
+      summary: Получить обновление анализа от ML
+      description: >
+        Внутренняя ручка для получения событий от ML-сервиса.
+        ML отправляет идентификатор задачи, текущий статус,
+        этап выполнения, результат или информацию об ошибке.
+        Go-backend сохраняет обновления в PostgreSQL.
+      operationId: receiveAnalysisEvent
+
+      security:
+        - InternalBearerAuth: []
+
+      requestBody:
+        required: true
+        description: Событие от ML-сервиса
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisEvent'
+
+      responses:
+        '204':
+          description: Событие успешно принято и сохранено
+
+        '400':
+          description: Некорректные данные события
+
+        '401':
+          description: Ошибка авторизации ML-сервиса
+
+        '404':
+          description: Задача анализа не найдена
+
+        '409':
+          description: Конфликт обновления состояния задачи
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/demo/users/{id}/chat/messages:
+    get:
+      tags:
+        - Chat
+      summary: Получить историю сообщений пользователя
+      description: >
+        Возвращает все сообщения общего AI-чата выбранного
+        демопользователя, отсортированные по времени
+        создания от старых к новым.
+      operationId: getChatMessages
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID демопользователя
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+
+      responses:
+        '200':
+          description: История сообщений успешно получена
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - messages
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - id
+                        - role
+                        - content
+                        - created_at
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+
+                        role:
+                          type: string
+                          description: Отправитель сообщения
+
+                        content:
+                          type: string
+                          description: Текст сообщения
+
+                        created_at:
+                          type: string
+                          format: date-time
+
+        '400':
+          description: Некорректный ID пользователя
+
+        '403':
+          description: Нет доступа к истории сообщений
+
+        '404':
+          description: Пользователь не найден
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+    post:
+      tags:
+        - Chat
+      summary: Отправить сообщение в общий чат
+      description: >
+        Сохраняет сообщение пользователя в PostgreSQL
+        и инициирует генерацию ответа AI.
+        Ответ передается через SSE и сохраняется
+        в общей истории сообщений пользователя.
+      operationId: sendChatMessage
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID демопользователя
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+
+      requestBody:
+        required: true
+        description: Сообщение пользователя
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                  description: Текст сообщения пользователя
+            example:
+              content: Какие финансовые риски есть у моего бизнеса?
+
+      responses:
+        '202':
+          description: Сообщение сохранено и принято для обработки
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message_id
+                properties:
+                  message_id:
+                    type: string
+                    format: uuid
+                    description: ID сохраненного сообщения
+
+        '400':
+          description: Некорректное сообщение или ID пользователя
+
+        '403':
+          description: Нет доступа к чату
+
+        '404':
+          description: Пользователь не найден
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+        '503':
+          description: AI-сервис недоступен
+
+  /api/v1/demo/users/{id}/chat/events:
+    get:
+      tags:
+        - Chat
+      summary: Получать ответы AI через SSE
+      description: >
+        Открывает SSE-соединение для получения ответов AI
+        в реальном времени. Сообщения AI сохраняются
+        в общей истории чата пользователя.
+        Формат событий будет согласован с ML.
+      operationId: streamChatEvents
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID демопользователя
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+
+      responses:
+        '200':
+          description: Поток событий AI-чата
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+        '400':
+          description: Некорректный ID пользователя
+
+        '403':
+          description: Нет доступа к чату
+
+        '404':
+          description: Пользователь не найден
+
+        '500':
+          description: Внутренняя ошибка сервера
+
+
+components:
+  securitySchemes:
+    InternalBearerAuth:
+      type: http
+      scheme: bearer
+      description: Токен для внутренних запросов ML к Go-backend
+
+  parameters:
+    JobID:
+      name: jobID
+      in: path
+      required: true
+      description: Уникальный идентификатор задачи анализа
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    AnalysisJobSummary:
+      type: object
+      required:
+        - job_id
+        - company_id
+        - role
+        - status
+        - created_at
+      properties:
+        job_id:
+          type: string
+          format: uuid
+
+        company_id:
+          type: integer
+          format: int64
+
+        role:
+          type: string
+
+        goal:
+          type: string
+          nullable: true
+
+        status:
+          type: string
+
+        stage:
+          type: string
+          nullable: true
+
+        created_at:
+          type: string
+          format: date-time
+
+    AnalysisJob:
+      allOf:
+        - $ref: '#/components/schemas/AnalysisJobSummary'
+        - type: object
+          required:
+            - demo_user_id
+            - updated_at
+          properties:
+            demo_user_id:
+              type: integer
+              format: int64
+              nullable: true
+
+            result:
+              type: object
+              nullable: true
+              additionalProperties: true
+              description: Результат анализа в формате JSON
+
+            error_message:
+              type: string
+              nullable: true
+
+            updated_at:
+              type: string
+              format: date-time
+
+    AnalysisEvent:
+      type: object
+      required:
+        - job_id
+        - status
+      properties:
+        job_id:
+          type: string
+          format: uuid
+
+        status:
+          type: string
+
+        stage:
+          type: string
+          nullable: true
+
+        result:
+          type: object
+          nullable: true
+          additionalProperties: true
+
+        error_message:
+          type: string
+          nullable: true

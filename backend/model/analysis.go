@@ -28,3 +28,13 @@ type AnalysisJob struct {
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
 }
+
+type AnalysisJobSummary struct {
+	ID        string    `json:"job_id"`
+	CompanyID int64     `json:"company_id"`
+	Role      string    `json:"role"`
+	Goal      *string   `json:"goal"`
+	Status    string    `json:"status"`
+	Stage     *string   `json:"stage"`
+	CreatedAt time.Time `json:"created_at"`
+}

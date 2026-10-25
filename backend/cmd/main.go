@@ -57,8 +57,13 @@ func main() {
 	mux.HandleFunc("GET /api/v1/demo/users", demoUserHandler.GetUsers)
 	mux.HandleFunc("GET /api/v1/demo/users/{id}/companies", companyHandler.GetByDemoUserID)
 	mux.HandleFunc("GET /api/v1/companies", companyHandler.GetAll)
-	mux.HandleFunc("POST /api/v1/companies/{companyID}/analysis", analysisHandler.StartAnalysis)
 	mux.HandleFunc("GET /api/v1/companies/{companyID}", companyHandler.GetByID)
+
+	mux.HandleFunc("POST /api/v1/companies/{companyID}/analysis", analysisHandler.StartAnalysis)
+	mux.HandleFunc("GET /api/v1/demo/users/{id}/analysis/jobs", analysisHandler.GetUserAnalysisJobs)
+	mux.HandleFunc("GET /api/v1/analysis/jobs/{jobID}", analysisHandler.GetAnalysisJob)
+	mux.HandleFunc("GET /api/v1/analysis/jobs/{jobID}/events", analysisHandler.StreamAnalysisEvents)
+	mux.HandleFunc("POST /api/v1/internal/analysis/events", analysisHandler.ReceiveAnalysisEvent)
 
 	server := &http.Server{
 		Addr:              ":8080",
