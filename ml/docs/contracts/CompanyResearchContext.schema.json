@@ -342,6 +342,83 @@
       ],
       "title": "SearchTask",
       "type": "object"
+    },
+    "StageEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "job_id": {
+          "format": "uuid",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "exclusiveMinimum": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "stage": {
+          "enum": [
+            "loading_profile",
+            "mapping_exposures",
+            "planning",
+            "retrieving",
+            "analyzing",
+            "validating",
+            "completed"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "started",
+            "completed",
+            "failed",
+            "skipped"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 500,
+          "title": "Summary",
+          "type": "string"
+        },
+        "counters": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Counters",
+          "type": "object"
+        }
+      },
+      "required": [
+        "job_id",
+        "run_id",
+        "seq",
+        "stage",
+        "state",
+        "at",
+        "summary"
+      ],
+      "title": "StageEvent",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -414,6 +491,14 @@
       },
       "title": "Versions",
       "type": "object"
+    },
+    "trace": {
+      "items": {
+        "$ref": "#/$defs/StageEvent"
+      },
+      "maxItems": 100,
+      "title": "Trace",
+      "type": "array"
     },
     "expires_at": {
       "anyOf": [

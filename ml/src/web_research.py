@@ -396,9 +396,12 @@ class WebSearchResult(BaseModel):
 
 
 def search_news(task: SearchTask, *, provider: NewsProvider, fetcher: DocumentFetcher,
-                store: EvidenceStore, now: datetime | None = None) -> WebSearchResult:
+                store: EvidenceStore, now: datetime | None = None,
+                check_budget=None) -> WebSearchResult:
     """Shared HTTP/pipeline entry point. Unknown dates are excluded unless explicitly opted in."""
     now = now or datetime.now(timezone.utc)
+    if check_budget:
+        check_budget()
     found = provider.search(task)
     result = WebSearchResult(candidates=found.candidates, errors=found.errors,
                              coverage={**found.coverage, "retrieved": 0, "excluded_unknown_date": 0,
@@ -410,6 +413,8 @@ def search_news(task: SearchTask, *, provider: NewsProvider, fetcher: DocumentFe
     start = parse_date(task.filters.get("start"))
     end = parse_date(task.filters.get("end")) or as_of
     for candidate in found.candidates:
+        if check_budget:
+            check_budget()
         try:
             page = fetcher.fetch(candidate)
             if page.status == "unsupported_pdf":

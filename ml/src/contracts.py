@@ -112,6 +112,7 @@ class CompanyResearchContext(Versioned):
     coverage: dict[str, Any] = Field(default_factory=dict)
     gaps: list[str] = Field(default_factory=list, max_length=30)
     versions: dict[str, str] = Field(default_factory=dict)
+    trace: list[StageEvent] = Field(default_factory=list, max_length=100)
     expires_at: datetime | None = None
 
 

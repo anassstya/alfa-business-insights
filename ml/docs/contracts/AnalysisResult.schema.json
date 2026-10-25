@@ -235,6 +235,14 @@
           "title": "Versions",
           "type": "object"
         },
+        "trace": {
+          "items": {
+            "$ref": "#/$defs/StageEvent"
+          },
+          "maxItems": 100,
+          "title": "Trace",
+          "type": "array"
+        },
         "expires_at": {
           "anyOf": [
             {

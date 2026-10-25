@@ -10,9 +10,11 @@ from typing import Mapping
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
-from .contracts import AnalysisRequest, AnalysisResult, SearchTask
+from .contracts import AnalysisRequest, AnalysisResult, CompanyResearchContext, SearchTask
+from .api import GatewayClient, ModelSettings
 from .pipeline import AnalysisPipeline
-from .profile_repository import JsonCompanyProfileRepository, ROOT
+from .profile_repository import JsonCompanyProfileRepository, SupabaseCompanyProfileRepository, ROOT
+from .research_pipeline import ResearchPipeline
 from .web_research import FileEvidenceStore, HTTPDocumentFetcher, TavilySearchProvider, search_news
 
 
@@ -34,7 +36,8 @@ class ServiceSettings:
 
 def create_app(*, settings: ServiceSettings | None = None,
                pipeline: AnalysisPipeline | None = None,
-               news_provider=None, document_fetcher=None, evidence_store=None) -> FastAPI:
+               news_provider=None, document_fetcher=None, evidence_store=None,
+               research_pipeline: ResearchPipeline | None = None) -> FastAPI:
     settings = settings or ServiceSettings()
     if pipeline is None and settings.fixture_mode:
         repository = JsonCompanyProfileRepository(
@@ -69,6 +72,19 @@ def create_app(*, settings: ServiceSettings | None = None,
     def internal_news_search(body: SearchTask, _authorized: None = Depends(authorize)):
         return search_news(body, provider=news_provider or TavilySearchProvider(),
                            fetcher=document_fetcher or HTTPDocumentFetcher(), store=store)
+
+    @app.post("/internal/research", response_model=CompanyResearchContext)
+    def internal_research(body: AnalysisRequest, _authorized: None = Depends(authorize)):
+        if research_pipeline is not None:
+            return research_pipeline.run(body)
+        repository = SupabaseCompanyProfileRepository.from_env()
+        try:
+            model = GatewayClient(ModelSettings.from_environment())
+            runner = ResearchPipeline(repository, model, news_provider or TavilySearchProvider(),
+                                      document_fetcher or HTTPDocumentFetcher(), store)
+            return runner.run(body)
+        finally:
+            repository.close()
 
     @app.get("/internal/evidence/{evidence_id}")
     def internal_evidence(evidence_id: str, _authorized: None = Depends(authorize)):
