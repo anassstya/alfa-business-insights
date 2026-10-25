@@ -5,11 +5,12 @@ from __future__ import annotations
 import hashlib
 import os
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from .contracts import AnalysisRequest, AnalysisResult, EvidenceRecord, Insight, StageEvent, VERSION
+from .contracts import AnalysisRequest, AnalysisResult, CompanyResearchContext, EvidenceRecord, Insight, ResearchWindow, StageEvent, VERSION
+from .exposures import RULE_VERSION, build_exposures
 from .profile_repository import CompanyProfileRepository, JsonCompanyProfileRepository
 
 
@@ -91,8 +92,16 @@ class AnalysisPipeline:
                                   f"profile_load_failed: {type(exc).__name__}"], trace=trace)
         emit("loading_profile", "completed", "Prepared profile loaded")
 
-        for stage in ("mapping_exposures", "planning"):
-            emit(stage, "skipped", "Not implemented in fixture milestone")
+        emit("mapping_exposures", "started", "Mapping profile factors")
+        exposures = build_exposures(profile, request.role, request.goal)
+        emit("mapping_exposures", "completed", "Profile factors mapped", exposures=len(exposures))
+        research_context = CompanyResearchContext(
+            company_id=request.company_id, profile_hash=profile.profile_hash,
+            as_of=request.as_of,
+            window=ResearchWindow(start=request.as_of - timedelta(days=request.lookback_days), end=request.as_of),
+            exposures=exposures, coverage={"mode": "fixture", "web_research": "not_started"},
+            gaps=["No live web research was performed"], versions={"exposure_rules": RULE_VERSION})
+        emit("planning", "skipped", "Fixture mode has no live planner")
 
         emit("retrieving", "started", "Loading hypothetical fixture evidence")
         try:
@@ -115,6 +124,7 @@ class AnalysisPipeline:
                 warnings.append("No fixture insight produced; max_insights may be zero")
             result = AnalysisResult(**common, outcome=outcome, insights=insights,
                                     evidence=evidence, profile_snapshot=profile,
+                                    research_context=research_context,
                                     warnings=warnings, trace=trace)
             emit("validating", "completed", "Result validated")
             emit("completed", "completed", "Fixture analysis finished")
@@ -123,6 +133,7 @@ class AnalysisPipeline:
             stage = trace[-1].stage
             emit(stage, "failed", f"Fixture analysis failed: {type(exc).__name__}")
             return AnalysisResult(**common, outcome="failed", profile_snapshot=profile,
+                                  research_context=research_context,
                                   warnings=[FIXTURE_WARNING, f"analysis_failed: {type(exc).__name__}"],
                                   trace=trace)
 

@@ -32,7 +32,8 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual([e.seq for e in events], list(range(1, len(events) + 1)))
         self.assertEqual([(e.stage, e.state) for e in events], [
             ("loading_profile", "started"), ("loading_profile", "completed"),
-            ("mapping_exposures", "skipped"), ("planning", "skipped"),
+            ("mapping_exposures", "started"), ("mapping_exposures", "completed"),
+            ("planning", "skipped"),
             ("retrieving", "started"), ("retrieving", "completed"),
             ("analyzing", "started"), ("analyzing", "completed"),
             ("validating", "started"), ("validating", "completed"),
@@ -42,6 +43,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(restored.insights[0].bank_view.status, "unavailable")
         self.assertEqual(restored.insights[0].evidence_refs, [restored.evidence[0].evidence_id])
         self.assertEqual(restored.insights[0].feature_refs, ["/base_information/profile"])
+        self.assertIsNotNone(restored.research_context)
 
     def test_invalid_role_and_ids(self):
         for change in ({"role": "admin"}, {"company_id": "F_1"},

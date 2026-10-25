@@ -424,6 +424,14 @@
           "title": "Factor",
           "type": "string"
         },
+        "search_topics": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "title": "Search Topics",
+          "type": "array"
+        },
         "feature_refs": {
           "items": {
             "type": "string"

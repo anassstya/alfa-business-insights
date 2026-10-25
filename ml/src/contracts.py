@@ -55,6 +55,7 @@ class BaseCompanyProfile(Versioned):
 class Exposure(Versioned):
     exposure_id: str = Field(max_length=80)
     factor: str = Field(max_length=160)
+    search_topics: list[str] = Field(default_factory=list, max_length=12)
     feature_refs: list[str] = Field(max_length=20)
     observed_values: dict[str, Any] = Field(default_factory=dict)
     rule_id: str = Field(max_length=80)
