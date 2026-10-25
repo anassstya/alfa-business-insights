@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"alfa-business-insights/backend/handler"
+	"alfa-business-insights/backend/mlclient"
 	"alfa-business-insights/backend/repo"
 	"alfa-business-insights/backend/service"
 
@@ -18,6 +19,20 @@ func main() {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		log.Fatal("DATABASE_URL is not set")
+	}
+
+	mlURL := os.Getenv("ML_SERVICE_URL")
+	if mlURL == "" {
+		log.Fatal("ML_SERVICE_URL is not set")
+	}
+
+	mlToken := os.Getenv("ML_SERVICE_TOKEN")
+	if mlToken == "" {
+		log.Fatal("ML_SERVICE_TOKEN is not set")
+	}
+
+	if os.Getenv("ML_CALLBACK_TOKEN") == "" {
+		log.Fatal("ML_CALLBACK_TOKEN is not set")
 	}
 
 	ctx, cancel := context.WithTimeout(
@@ -38,6 +53,8 @@ func main() {
 
 	log.Println("Connected to PostgreSQL successfully")
 
+	mlClient := mlclient.NewClient(mlURL, mlToken)
+
 	roleRepo := repo.NewRoleRepository(db)
 	roleHandler := handler.NewRoleHandler(roleRepo)
 
@@ -48,22 +65,85 @@ func main() {
 	companyHandler := handler.NewCompanyHandler(companyRepo)
 
 	analysisRepo := repo.NewAnalysisRepository(db)
-	analysisService := service.NewAnalysisService(analysisRepo)
+	analysisService := service.NewAnalysisService(
+		analysisRepo,
+		mlClient,
+	)
 	analysisHandler := handler.NewAnalysisHandler(analysisService)
+
+	chatRepo := repo.NewChatRepository(db)
+	chatService := service.NewChatService(
+		chatRepo,
+		analysisRepo,
+	)
+	chatHandler := handler.NewChatHandler(chatService)
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /api/v1/roles", roleHandler.GetRoles)
-	mux.HandleFunc("GET /api/v1/demo/users", demoUserHandler.GetUsers)
-	mux.HandleFunc("GET /api/v1/demo/users/{id}/companies", companyHandler.GetByDemoUserID)
-	mux.HandleFunc("GET /api/v1/companies", companyHandler.GetAll)
-	mux.HandleFunc("GET /api/v1/companies/{companyID}", companyHandler.GetByID)
+	mux.HandleFunc(
+		"GET /api/v1/roles",
+		roleHandler.GetRoles,
+	)
 
-	mux.HandleFunc("POST /api/v1/companies/{companyID}/analysis", analysisHandler.StartAnalysis)
-	mux.HandleFunc("GET /api/v1/demo/users/{id}/analysis/jobs", analysisHandler.GetUserAnalysisJobs)
-	mux.HandleFunc("GET /api/v1/analysis/jobs/{jobID}", analysisHandler.GetAnalysisJob)
-	mux.HandleFunc("GET /api/v1/analysis/jobs/{jobID}/events", analysisHandler.StreamAnalysisEvents)
-	mux.HandleFunc("POST /api/v1/internal/analysis/events", analysisHandler.ReceiveAnalysisEvent)
+	mux.HandleFunc(
+		"GET /api/v1/demo/users",
+		demoUserHandler.GetUsers,
+	)
+
+	mux.HandleFunc(
+		"GET /api/v1/demo/users/{id}/companies",
+		companyHandler.GetByDemoUserID,
+	)
+
+	mux.HandleFunc(
+		"GET /api/v1/companies",
+		companyHandler.GetAll,
+	)
+
+	mux.HandleFunc(
+		"GET /api/v1/companies/{companyID}",
+		companyHandler.GetByID,
+	)
+
+	mux.HandleFunc(
+		"POST /api/v1/companies/{companyID}/analysis",
+		analysisHandler.StartAnalysis,
+	)
+
+	mux.HandleFunc(
+		"GET /api/v1/demo/users/{id}/analysis/jobs",
+		analysisHandler.GetUserAnalysisJobs,
+	)
+
+	mux.HandleFunc(
+		"GET /api/v1/analysis/jobs/{jobID}",
+		analysisHandler.GetAnalysisJob,
+	)
+
+	mux.HandleFunc(
+		"GET /api/v1/analysis/jobs/{jobID}/events",
+		analysisHandler.StreamAnalysisEvents,
+	)
+
+	mux.HandleFunc(
+		"POST /api/v1/internal/analysis/events",
+		analysisHandler.ReceiveAnalysisEvent,
+	)
+
+	mux.HandleFunc(
+		"GET /api/v1/analysis/jobs/{jobID}/chat/messages",
+		chatHandler.GetMessages,
+	)
+
+	mux.HandleFunc(
+		"POST /api/v1/analysis/jobs/{jobID}/chat/messages",
+		chatHandler.SendMessage,
+	)
+
+	mux.HandleFunc(
+		"GET /api/v1/analysis/jobs/{jobID}/chat/events",
+		chatHandler.StreamChatEvents,
+	)
 
 	server := &http.Server{
 		Addr:              ":8080",
@@ -72,6 +152,7 @@ func main() {
 	}
 
 	log.Println("Server started on port 8080")
+
 	log.Fatal(server.ListenAndServe())
 }
 

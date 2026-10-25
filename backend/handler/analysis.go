@@ -30,65 +30,125 @@ func NewAnalysisHandler(s *service.AnalysisService) *AnalysisHandler {
 }
 
 func (h *AnalysisHandler) StartAnalysis(w http.ResponseWriter, r *http.Request) {
-	companyID, err := strconv.ParseInt(r.PathValue("companyID"), 10, 64)
+	companyID, err := strconv.ParseInt(
+		r.PathValue("companyID"),
+		10,
+		64,
+	)
 	if err != nil || companyID <= 0 {
-		writeAnalysisError(w, http.StatusBadRequest, "Некорректный ID компании")
+		writeAnalysisError(
+			w,
+			http.StatusBadRequest,
+			"Некорректный ID компании",
+		)
 		return
 	}
 
 	var req model.StartAnalysisRequest
 
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder := json.NewDecoder(
+		http.MaxBytesReader(w, r.Body, 1<<20),
+	)
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&req); err != nil {
-		writeAnalysisError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		writeAnalysisError(
+			w,
+			http.StatusBadRequest,
+			"Некорректное тело запроса",
+		)
 		return
 	}
 
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
-		writeAnalysisError(w, http.StatusBadRequest, "Ожидался один JSON-объект")
+		writeAnalysisError(
+			w,
+			http.StatusBadRequest,
+			"Ожидался один JSON-объект",
+		)
 		return
 	}
 
-	_, err = h.service.PrepareAnalysis(r.Context(), companyID, req)
+	jobID, err := h.service.StartAnalysis(
+		r.Context(),
+		companyID,
+		req,
+	)
 
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidInput):
-			writeAnalysisError(w, http.StatusBadRequest, "Некорректные параметры")
+			writeAnalysisError(
+				w,
+				http.StatusBadRequest,
+				"Некорректные параметры",
+			)
 
 		case errors.Is(err, service.ErrInvalidRole):
-			writeAnalysisError(w, http.StatusBadRequest, "Неизвестная роль")
+			writeAnalysisError(
+				w,
+				http.StatusBadRequest,
+				"Неизвестная роль",
+			)
 
 		case errors.Is(err, service.ErrCompanyNotFound):
-			writeAnalysisError(w, http.StatusNotFound, "Компания не найдена или недоступна")
+			writeAnalysisError(
+				w,
+				http.StatusNotFound,
+				"Компания не найдена или недоступна",
+			)
 
 		default:
-			writeAnalysisError(w, http.StatusInternalServerError, "Внутренняя ошибка сервера")
+			writeAnalysisError(
+				w,
+				http.StatusInternalServerError,
+				"Не удалось запустить анализ",
+			)
 		}
 		return
 	}
 
-	// TODO: Создать задачу в БД и передать её ML-сервису.
-	writeAnalysisError(w, http.StatusServiceUnavailable, "Запуск ML-анализа пока не подключён")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+
+	_ = json.NewEncoder(w).Encode(
+		model.StartAnalysisResponse{
+			JobID: jobID,
+		},
+	)
 }
 
 func (h *AnalysisHandler) GetUserAnalysisJobs(w http.ResponseWriter, r *http.Request) {
-	demoUserID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	demoUserID, err := strconv.ParseInt(
+		r.PathValue("id"),
+		10,
+		64,
+	)
 	if err != nil || demoUserID <= 0 {
-		writeAnalysisError(w, http.StatusBadRequest, "Некорректный ID пользователя")
+		writeAnalysisError(
+			w,
+			http.StatusBadRequest,
+			"Некорректный ID пользователя",
+		)
 		return
 	}
 
-	jobs, err := h.service.ListAnalysisJobs(r.Context(), demoUserID)
+	jobs, err := h.service.ListAnalysisJobs(
+		r.Context(),
+		demoUserID,
+	)
 	if err != nil {
-		writeAnalysisError(w, http.StatusInternalServerError, "Не удалось получить историю анализов")
+		writeAnalysisError(
+			w,
+			http.StatusInternalServerError,
+			"Не удалось получить историю анализов",
+		)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"jobs": jobs,
 	})
@@ -98,23 +158,39 @@ func (h *AnalysisHandler) GetAnalysisJob(w http.ResponseWriter, r *http.Request)
 	jobID := r.PathValue("jobID")
 
 	if !analysisUUIDPattern.MatchString(jobID) {
-		writeAnalysisError(w, http.StatusBadRequest, "Некорректный job_id")
+		writeAnalysisError(
+			w,
+			http.StatusBadRequest,
+			"Некорректный job_id",
+		)
 		return
 	}
 
-	job, err := h.service.GetAnalysisJob(r.Context(), jobID)
+	job, err := h.service.GetAnalysisJob(
+		r.Context(),
+		jobID,
+	)
 
 	if err != nil {
 		if errors.Is(err, service.ErrAnalysisNotFound) {
-			writeAnalysisError(w, http.StatusNotFound, "Анализ не найден")
+			writeAnalysisError(
+				w,
+				http.StatusNotFound,
+				"Анализ не найден",
+			)
 			return
 		}
 
-		writeAnalysisError(w, http.StatusInternalServerError, "Не удалось получить анализ")
+		writeAnalysisError(
+			w,
+			http.StatusInternalServerError,
+			"Не удалось получить анализ",
+		)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
 	_ = json.NewEncoder(w).Encode(job)
 }
 
@@ -122,24 +198,43 @@ func (h *AnalysisHandler) StreamAnalysisEvents(w http.ResponseWriter, r *http.Re
 	jobID := r.PathValue("jobID")
 
 	if !analysisUUIDPattern.MatchString(jobID) {
-		writeAnalysisError(w, http.StatusBadRequest, "Некорректный job_id")
+		writeAnalysisError(
+			w,
+			http.StatusBadRequest,
+			"Некорректный job_id",
+		)
 		return
 	}
 
-	job, err := h.service.GetAnalysisJob(r.Context(), jobID)
+	job, err := h.service.GetAnalysisJob(
+		r.Context(),
+		jobID,
+	)
 	if err != nil {
 		if errors.Is(err, service.ErrAnalysisNotFound) {
-			writeAnalysisError(w, http.StatusNotFound, "Анализ не найден")
+			writeAnalysisError(
+				w,
+				http.StatusNotFound,
+				"Анализ не найден",
+			)
 			return
 		}
 
-		writeAnalysisError(w, http.StatusInternalServerError, "Не удалось получить анализ")
+		writeAnalysisError(
+			w,
+			http.StatusInternalServerError,
+			"Не удалось получить анализ",
+		)
 		return
 	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeAnalysisError(w, http.StatusInternalServerError, "SSE не поддерживается")
+		writeAnalysisError(
+			w,
+			http.StatusInternalServerError,
+			"SSE не поддерживается",
+		)
 		return
 	}
 
@@ -152,9 +247,14 @@ func (h *AnalysisHandler) StreamAnalysisEvents(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if _, err := fmt.Fprintf(w, "event: update\ndata: %s\n\n", lastData); err != nil {
+	if _, err := fmt.Fprintf(
+		w,
+		"event: update\ndata: %s\n\n",
+		lastData,
+	); err != nil {
 		return
 	}
+
 	flusher.Flush()
 
 	ticker := time.NewTicker(2 * time.Second)
@@ -172,10 +272,14 @@ func (h *AnalysisHandler) StreamAnalysisEvents(w http.ResponseWriter, r *http.Re
 			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
 				return
 			}
+
 			flusher.Flush()
 
 		case <-ticker.C:
-			job, err := h.service.GetAnalysisJob(r.Context(), jobID)
+			job, err := h.service.GetAnalysisJob(
+				r.Context(),
+				jobID,
+			)
 			if err != nil {
 				return
 			}
@@ -191,7 +295,11 @@ func (h *AnalysisHandler) StreamAnalysisEvents(w http.ResponseWriter, r *http.Re
 
 			lastData = data
 
-			if _, err := fmt.Fprintf(w, "event: update\ndata: %s\n\n", data); err != nil {
+			if _, err := fmt.Fprintf(
+				w,
+				"event: update\ndata: %s\n\n",
+				data,
+			); err != nil {
 				return
 			}
 
@@ -201,46 +309,73 @@ func (h *AnalysisHandler) StreamAnalysisEvents(w http.ResponseWriter, r *http.Re
 }
 
 type analysisEventRequest struct {
-	JobID        string          `json:"job_id"`
-	Status       string          `json:"status"`
-	Stage        *string         `json:"stage"`
-	Result       json.RawMessage `json:"result"`
-	ErrorMessage *string         `json:"error_message"`
+	JobID        string               `json:"job_id"`
+	Status       model.AnalysisStatus `json:"status"`
+	Stage        *model.AnalysisStage `json:"stage"`
+	Result       json.RawMessage      `json:"result"`
+	ErrorMessage *string              `json:"error_message"`
 }
 
 func (h *AnalysisHandler) ReceiveAnalysisEvent(w http.ResponseWriter, r *http.Request) {
 	token := os.Getenv("ML_CALLBACK_TOKEN")
+
 	if token == "" {
-		writeAnalysisError(w, http.StatusServiceUnavailable, "ML callback не настроен")
+		writeAnalysisError(
+			w,
+			http.StatusServiceUnavailable,
+			"ML callback не настроен",
+		)
 		return
 	}
 
 	auth := r.Header.Get("Authorization")
 	expected := "Bearer " + token
 
-	if subtle.ConstantTimeCompare([]byte(auth), []byte(expected)) != 1 {
-		writeAnalysisError(w, http.StatusUnauthorized, "Не авторизован")
+	if subtle.ConstantTimeCompare(
+		[]byte(auth),
+		[]byte(expected),
+	) != 1 {
+		writeAnalysisError(
+			w,
+			http.StatusUnauthorized,
+			"Не авторизован",
+		)
 		return
 	}
 
 	var req analysisEventRequest
 
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	decoder := json.NewDecoder(
+		http.MaxBytesReader(w, r.Body, 1<<20),
+	)
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&req); err != nil {
-		writeAnalysisError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		writeAnalysisError(
+			w,
+			http.StatusBadRequest,
+			"Некорректное тело запроса",
+		)
 		return
 	}
 
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
-		writeAnalysisError(w, http.StatusBadRequest, "Ожидался один JSON-объект")
+		writeAnalysisError(
+			w,
+			http.StatusBadRequest,
+			"Ожидался один JSON-объект",
+		)
 		return
 	}
 
-	if !analysisUUIDPattern.MatchString(req.JobID) || strings.TrimSpace(req.Status) == "" {
-		writeAnalysisError(w, http.StatusBadRequest, "Некорректные параметры события")
+	if !analysisUUIDPattern.MatchString(req.JobID) ||
+		strings.TrimSpace(string(req.Status)) == "" {
+		writeAnalysisError(
+			w,
+			http.StatusBadRequest,
+			"Некорректные параметры события",
+		)
 		return
 	}
 
@@ -256,13 +391,25 @@ func (h *AnalysisHandler) ReceiveAnalysisEvent(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidInput):
-			writeAnalysisError(w, http.StatusBadRequest, "Некорректные параметры события")
+			writeAnalysisError(
+				w,
+				http.StatusBadRequest,
+				"Некорректные параметры события",
+			)
 
 		case errors.Is(err, service.ErrAnalysisNotFound):
-			writeAnalysisError(w, http.StatusNotFound, "Анализ не найден")
+			writeAnalysisError(
+				w,
+				http.StatusNotFound,
+				"Анализ не найден",
+			)
 
 		default:
-			writeAnalysisError(w, http.StatusInternalServerError, "Не удалось обновить анализ")
+			writeAnalysisError(
+				w,
+				http.StatusInternalServerError,
+				"Не удалось обновить анализ",
+			)
 		}
 		return
 	}
