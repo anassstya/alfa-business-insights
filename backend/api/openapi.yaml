@@ -674,226 +674,207 @@ paths:
           description: Внутренняя ошибка сервера
 
   /api/v1/internal/analysis/events:
-    post:
-      tags:
-        - Analysis
-      summary: Получить обновление анализа от ML
-      description: >
-        Внутренняя ручка для получения событий от ML-сервиса.
-        ML отправляет идентификатор задачи, текущий статус,
-        этап выполнения, результат или информацию об ошибке.
-        Go-backend сохраняет обновления в PostgreSQL.
-      operationId: receiveAnalysisEvent
+      post:
+        tags:
+          - Analysis
+        summary: Получить обновление анализа от ML
+        description: >
+          Внутренняя ручка для получения событий от ML-сервиса.
+          ML отправляет идентификатор задачи, текущий статус,
+          этап выполнения, результат или информацию об ошибке.
+          Go-backend сохраняет обновления в PostgreSQL.
+        operationId: receiveAnalysisEvent
 
-      security:
-        - InternalBearerAuth: []
+        security:
+          - InternalBearerAuth: [ ]
 
-      requestBody:
-        required: true
-        description: Событие от ML-сервиса
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AnalysisEvent'
-
-      responses:
-        '204':
-          description: Событие успешно принято и сохранено
-
-        '400':
-          description: Некорректные данные события
-
-        '401':
-          description: Ошибка авторизации ML-сервиса
-
-        '404':
-          description: Задача анализа не найдена
-
-        '409':
-          description: Конфликт обновления состояния задачи
-
-        '500':
-          description: Внутренняя ошибка сервера
-
-  /api/v1/demo/users/{id}/chat/messages:
-    get:
-      tags:
-        - Chat
-      summary: Получить историю сообщений пользователя
-      description: >
-        Возвращает все сообщения общего AI-чата выбранного
-        демопользователя, отсортированные по времени
-        создания от старых к новым.
-      operationId: getChatMessages
-
-      parameters:
-        - name: id
-          in: path
+        requestBody:
           required: true
-          description: ID демопользователя
-          schema:
-            type: integer
-            format: int64
-            minimum: 1
+          description: Событие от ML-сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisEvent'
 
-      responses:
-        '200':
-          description: История сообщений успешно получена
+        responses:
+          '204':
+            description: Событие успешно принято и сохранено
+
+          '400':
+            description: Некорректные данные события
+
+          '401':
+            description: Ошибка авторизации ML-сервиса
+
+          '404':
+            description: Задача анализа не найдена
+
+          '409':
+            description: Конфликт обновления состояния задачи
+
+          '500':
+            description: Внутренняя ошибка сервера
+
+  /api/v1/analysis/jobs/{jobID}/chat/messages:
+      get:
+        tags:
+          - Chat
+        summary: Получить историю сообщений аналитической сессии
+        description: >
+          Возвращает все сообщения чата выбранной аналитической
+          сессии, отсортированные по времени создания
+          от старых к новым. Каждая сессия имеет
+          собственную историю переписки.
+        operationId: getChatMessages
+
+        parameters:
+          - $ref: '#/components/parameters/JobID'
+
+        responses:
+          '200':
+            description: История сообщений успешно получена
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - messages
+                  properties:
+                    messages:
+                      type: array
+                      items:
+                        type: object
+                        required:
+                          - id
+                          - role
+                          - content
+                          - created_at
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+
+                          role:
+                            type: string
+                            description: Отправитель сообщения
+
+                          content:
+                            type: string
+                            description: Текст сообщения
+
+                          created_at:
+                            type: string
+                            format: date-time
+
+          '400':
+            description: Некорректный job_id
+
+          '403':
+            description: Нет доступа к истории сообщений
+
+          '404':
+            description: Аналитическая сессия не найдена
+
+          '500':
+            description: Внутренняя ошибка сервера
+
+      post:
+        tags:
+          - Chat
+        summary: Отправить сообщение в чат аналитической сессии
+        description: >
+          Сохраняет сообщение пользователя в PostgreSQL
+          с привязкой к выбранной аналитической сессии
+          и инициирует генерацию ответа AI.
+          Ответ передается через SSE и сохраняется
+          в истории сообщений этой сессии.
+        operationId: sendChatMessage
+
+        parameters:
+          - $ref: '#/components/parameters/JobID'
+
+        requestBody:
+          required: true
+          description: Сообщение пользователя
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - messages
+                  - content
                 properties:
-                  messages:
-                    type: array
-                    items:
-                      type: object
-                      required:
-                        - id
-                        - role
-                        - content
-                        - created_at
-                      properties:
-                        id:
-                          type: string
-                          format: uuid
-
-                        role:
-                          type: string
-                          description: Отправитель сообщения
-
-                        content:
-                          type: string
-                          description: Текст сообщения
-
-                        created_at:
-                          type: string
-                          format: date-time
-
-        '400':
-          description: Некорректный ID пользователя
-
-        '403':
-          description: Нет доступа к истории сообщений
-
-        '404':
-          description: Пользователь не найден
-
-        '500':
-          description: Внутренняя ошибка сервера
-
-    post:
-      tags:
-        - Chat
-      summary: Отправить сообщение в общий чат
-      description: >
-        Сохраняет сообщение пользователя в PostgreSQL
-        и инициирует генерацию ответа AI.
-        Ответ передается через SSE и сохраняется
-        в общей истории сообщений пользователя.
-      operationId: sendChatMessage
-
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: ID демопользователя
-          schema:
-            type: integer
-            format: int64
-            minimum: 1
-
-      requestBody:
-        required: true
-        description: Сообщение пользователя
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - content
-              properties:
-                content:
-                  type: string
-                  minLength: 1
-                  description: Текст сообщения пользователя
-            example:
-              content: Какие финансовые риски есть у моего бизнеса?
-
-      responses:
-        '202':
-          description: Сообщение сохранено и принято для обработки
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - message_id
-                properties:
-                  message_id:
+                  content:
                     type: string
-                    format: uuid
-                    description: ID сохраненного сообщения
+                    minLength: 1
+                    description: Текст сообщения пользователя
+              example:
+                content: Как можно снизить финансовые риски компании?
 
-        '400':
-          description: Некорректное сообщение или ID пользователя
+        responses:
+          '202':
+            description: Сообщение сохранено и принято для обработки
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - message_id
+                  properties:
+                    message_id:
+                      type: string
+                      format: uuid
+                      description: ID сохраненного сообщения
 
-        '403':
-          description: Нет доступа к чату
+          '400':
+            description: Некорректное сообщение или job_id
 
-        '404':
-          description: Пользователь не найден
+          '403':
+            description: Нет доступа к чату
 
-        '500':
-          description: Внутренняя ошибка сервера
+          '404':
+            description: Аналитическая сессия не найдена
 
-        '503':
-          description: AI-сервис недоступен
+          '500':
+            description: Внутренняя ошибка сервера
 
-  /api/v1/demo/users/{id}/chat/events:
-    get:
-      tags:
-        - Chat
-      summary: Получать ответы AI через SSE
-      description: >
-        Открывает SSE-соединение для получения ответов AI
-        в реальном времени. Сообщения AI сохраняются
-        в общей истории чата пользователя.
-        Формат событий будет согласован с ML.
-      operationId: streamChatEvents
+          '503':
+            description: AI-сервис недоступен
 
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: ID демопользователя
-          schema:
-            type: integer
-            format: int64
-            minimum: 1
+  /api/v1/analysis/jobs/{jobID}/chat/events:
+      get:
+        tags:
+          - Chat
+        summary: Получать ответы AI через SSE
+        description: >
+          Открывает SSE-соединение для получения ответов AI
+          внутри выбранной аналитической сессии.
+          Ответы AI сохраняются в истории сообщений,
+          связанной с job_id.
+          Формат событий будет согласован с ML.
+        operationId: streamChatEvents
 
-      responses:
-        '200':
-          description: Поток событий AI-чата
-          content:
-            text/event-stream:
-              schema:
-                type: string
+        parameters:
+          - $ref: '#/components/parameters/JobID'
 
-        '400':
-          description: Некорректный ID пользователя
+        responses:
+          '200':
+            description: Поток событий AI-чата
+            content:
+              text/event-stream:
+                schema:
+                  type: string
 
-        '403':
-          description: Нет доступа к чату
+          '400':
+            description: Некорректный job_id
 
-        '404':
-          description: Пользователь не найден
+          '403':
+            description: Нет доступа к чату
 
-        '500':
-          description: Внутренняя ошибка сервера
+          '404':
+            description: Аналитическая сессия не найдена
 
+          '500':
+            description: Внутренняя ошибка сервера
 
 components:
   securitySchemes:
