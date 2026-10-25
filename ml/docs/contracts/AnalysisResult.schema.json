@@ -843,6 +843,15 @@
       "title": "As Of",
       "type": "string"
     },
+    "mode": {
+      "default": "live",
+      "enum": [
+        "fixture",
+        "live"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
     "outcome": {
       "enum": [
         "ok",

@@ -168,6 +168,7 @@ class AnalysisResult(Versioned):
     role: Role
     goal: str | None = Field(default=None, max_length=1000)
     as_of: datetime
+    mode: Literal["fixture", "live"] = "live"
     outcome: Literal["ok", "partial", "no_relevant_evidence", "failed"]
     insights: list[Insight] = Field(default_factory=list, max_length=5)
     evidence: list[EvidenceRecord] = Field(default_factory=list, max_length=48)
