@@ -13,3 +13,5 @@ export * from './Skeleton';
 export * from './DateField';
 export * from './Modal';
 export * from './Radio';
+export * from './SubmitField';
+export * from './VisuallyHidden';

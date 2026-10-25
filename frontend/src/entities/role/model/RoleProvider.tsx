@@ -6,7 +6,7 @@ import { getRole } from "../api";
 const RoleProvider = ({ children }: PropsWithChildren) => {
   const { data = [] } = useQuery({
     queryKey: ['roles'],
-    queryFn: getRole,
+    queryFn: ({ signal }) => getRole(signal),
   })
 
   return (

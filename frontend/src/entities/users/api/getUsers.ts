@@ -1,8 +1,8 @@
 import { apiClient } from "@/shared";
-import type { DemoUser } from "../model";
+import type { DemoUsersResponse } from "../model";
 
-const getUsers = async () => {
-  const { data } = await apiClient.get<{users: Array<DemoUser>}>('/v1/demo/users')
+const getUsers = async (signal?: AbortSignal) => {
+  const { data } = await apiClient.get<DemoUsersResponse>('/api/v1/demo/users', { signal })
 
   return data.users
 }

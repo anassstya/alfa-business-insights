@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
+import type { Role } from "./roles";
 
-const RoleContext = createContext<Array<{code: string, full_name: string}> | undefined>(undefined)
+const RoleContext = createContext<Role[] | undefined>(undefined)
 
 const useRoleContext = () => {
   const context = useContext(RoleContext)

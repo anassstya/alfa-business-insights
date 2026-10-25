@@ -1,26 +1,51 @@
 import type { PaginationParams } from "@/shared";
 
-interface CompanyShort {
+interface Company {
   id: number;
   synthetic_u: string;
-  industry_name: string;
-  city: string;
-  region: string;
+  city: string | null;
+  region: string | null;
+  revenue_company: number | null;
+  mainokved_name: string | null;
+  mainokved_code: string | null;
+  org_type: string | null;
+  okfs_name: string | null;
+  company_age_years_gradation: string | null;
+  eco_mark_label: string | null;
+  amount_workers_fns_gradation: string | null;
+  cl_type: string | null;
 }
 
-interface CompanyDetails extends CompanyShort {
-  org_type: string;
-  industry_code: string;
-  company_age_years_gradation: string;
-  amount_workers_fns_gradation: string;
-  revenue_company: number;
-  cl_type: string;
+interface CompanyDetails extends Omit<Company, 'cl_type'> {
+  cl_type: 'CLIENT';
 }
 
-interface CompaniesParams extends PaginationParams {
-  city?: string;
-  region?: string;
-  industry?: string;
+type CompaniesParams = PaginationParams;
+
+interface CompaniesResponse {
+  companies: Company[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
-export type { CompanyShort, CompanyDetails, CompaniesParams };
+
+interface UserCompaniesResponse {
+  companies: Company[];
+}
+
+const COMPANIES_MAX_LIMIT = 100;
+const COMPANIES_PAGE_SIZE = 50;
+
+interface CompanyAnalyticsBody {
+  demo_user_id?: number,
+  role: string;
+  goal?: string;
+}
+
+interface CompanyAnalyticsResponse {
+  job_id: string;
+}
+
+export { COMPANIES_MAX_LIMIT, COMPANIES_PAGE_SIZE };
+export type { Company, CompanyDetails, CompaniesParams, CompaniesResponse, UserCompaniesResponse, CompanyAnalyticsResponse, CompanyAnalyticsBody };

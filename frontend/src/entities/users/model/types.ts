@@ -5,4 +5,8 @@ interface DemoUser {
   last_name: string
 }
 
-export type { DemoUser }
+interface DemoUsersResponse {
+  users: DemoUser[]
+}
+
+export type { DemoUser, DemoUsersResponse }

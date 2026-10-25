@@ -1,6 +1,7 @@
 import styled from "styled-components";
 
 const FeedRoot = styled.section`
+position: relative;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -81,4 +82,8 @@ const LoadMore = styled.div`
   }
 `
 
-export { FeedRoot, Summary, DayGroup, DayLabel, StateMessage, StateIcon, StateText, LoadMore };
+const Purpose = styled.div`
+  width: 100%;
+`
+
+export { FeedRoot, Summary, DayGroup, DayLabel, StateMessage, StateIcon, StateText, LoadMore, Purpose };

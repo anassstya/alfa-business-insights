@@ -11,9 +11,12 @@ const MainPage = () => {
   return (
     <MainPageStyled>
       <Hero>
-        <Title.H2>Новости для вашего бизнеса</Title.H2>
+        <Title.H2>Новостная аналитика для вашего бизнеса</Title.H2>
         <HeroSubtitle>
           Подборка для роли <b>{roles.find(r => r.code === role)?.full_name ?? 'Роль не найдена'}</b> — только то, что влияет на вашу компанию
+        </HeroSubtitle>
+        <HeroSubtitle>
+          Аналитика не является ИИР
         </HeroSubtitle>
       </Hero>
 
@@ -29,4 +32,4 @@ const MainPage = () => {
   )
 }
 
-export {MainPage}
+export default MainPage
