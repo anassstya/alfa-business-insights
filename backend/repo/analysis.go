@@ -3,6 +3,7 @@ package repo
 import (
 	"alfa-business-insights/backend/model"
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5"
@@ -70,14 +71,15 @@ func (r *AnalysisRepository) Create(ctx context.Context, job model.AnalysisJob) 
 			company_id,
 			demo_user_id,
 			role,
-			status
+			goal
 		)
-		VALUES ($1::uuid, $2, $3, $4, 'pending')
+		VALUES ($1::uuid, $2, $3, $4, $5)
 	`,
 		job.ID,
 		job.CompanyID,
 		job.DemoUserID,
 		job.Role,
+		job.Goal,
 	)
 
 	return err
@@ -124,4 +126,83 @@ func (r *AnalysisRepository) GetByID(ctx context.Context, jobID string) (*model.
 	}
 
 	return &job, nil
+}
+
+func (r *AnalysisRepository) ListByDemoUserID(ctx context.Context, demoUserID int64) ([]model.AnalysisJobSummary, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			id::text,
+			company_id,
+			role,
+			goal,
+			status,
+			stage,
+			created_at
+		FROM analysis_jobs
+		WHERE demo_user_id = $1
+		ORDER BY created_at DESC, id DESC
+	`, demoUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	jobs := make([]model.AnalysisJobSummary, 0)
+
+	for rows.Next() {
+		var job model.AnalysisJobSummary
+
+		err := rows.Scan(
+			&job.ID,
+			&job.CompanyID,
+			&job.Role,
+			&job.Goal,
+			&job.Status,
+			&job.Stage,
+			&job.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		jobs = append(jobs, job)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return jobs, nil
+}
+
+func (r *AnalysisRepository) UpdateFromEvent(ctx context.Context, jobID string, status string, stage *string, result json.RawMessage, errorMessage *string) (bool, error) {
+	var id string
+
+	err := r.db.QueryRow(ctx, `
+		UPDATE analysis_jobs
+		SET
+			status = $2,
+			stage = COALESCE($3, stage),
+			result = COALESCE($4::jsonb, result),
+			error_message = COALESCE($5, error_message),
+			updated_at = NOW()
+		WHERE id = $1::uuid
+		RETURNING id::text
+	`,
+		jobID,
+		status,
+		stage,
+		result,
+		errorMessage,
+	).Scan(&id)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
