@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDemoUserAnalysisJobs } from "../api/history";
-import { analysisKeys } from "./analysisResult";
+import { analysisKeys } from "./keys";
 
 /** История анализов демопользователя с сервера; без выбранного пользователя запрос не идёт */
 const useDemoUserAnalysisJobs = (userId?: number) => useQuery({

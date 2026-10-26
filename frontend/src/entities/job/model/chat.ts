@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { skipToken, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { chatEvents, getChatMessages, sendChatMessage } from "../api/chat";
-import { analysisKeys } from "./analysisResult";
-import type { AnalysisJob, ChatMessage } from "./types";
+import { analysisJobQuery } from "./analysisResult";
+import { analysisKeys } from "./keys";
+import type { ChatMessage } from "./types";
 
 /**
  * Сообщение с уже известным id заменяется на месте, новое — дописывается в конец.
@@ -22,16 +23,12 @@ const upsertMessages = (current: ChatMessage[] | undefined, incoming: ChatMessag
 }
 
 /**
- * Чат доступен только по завершённому анализу (completed с результатом).
- * Финальное AnalysisJob кладёт в кэш useAnalysisResult — пока анализ идёт, там пусто.
+ * Чат доступен только по завершённому анализу (completed с результатом) —
+ * по задаче из GET jobs/{jobID}, которую, пока анализ идёт, обновляет SSE.
  */
 const useIsChatAvailable = (jobId: string | undefined) => {
-  const { data: job } = useQuery<AnalysisJob>({
-    queryKey: analysisKeys.job(jobId ?? ''),
-    queryFn: skipToken,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
+  // тот же запрос задачи, что и у useAnalysisResult: данные общие, повторного GET нет
+  const { data: job } = useQuery(analysisJobQuery(jobId));
 
   return !!jobId && job?.status === 'completed' && !!job.result;
 }

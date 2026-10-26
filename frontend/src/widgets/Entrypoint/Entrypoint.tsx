@@ -9,7 +9,8 @@ import { useDemoUsers } from "@/entities/users";
 // const FORM_VALUE = [{value: 'users', label: 'Пользователь'}, { value: 'custom', label: 'Пользовательский'}]
 
 const Entrypoint = () => {
-  const [showHelloModal, setHelloModal] = useState(true)
+  const { setRole, setCompanyId, setUserId, userId } = useSession()
+  const [showHelloModal, setHelloModal] = useState(!userId)
   const onClose = () => setHelloModal(false)
   // const {
   //   data: companies, isPending: companiesPending, hasNextPage, isFetchingNextPage, fetchNextPage,
@@ -25,7 +26,6 @@ const Entrypoint = () => {
     })
   // const roles = useRoleContext()
   // const options = useMemo(() => roles.map(role => ({value: role.code, label: role.full_name})),[roles])
-  const { setRole, setCompanyId, setUserId } = useSession()
   const formType = watch('formType')
   // useEffect(() => {
   //   setValues({

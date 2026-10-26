@@ -1,4 +1,15 @@
+import { apiClient } from "@/shared";
 import type { AnalysisJob, AnalysisStatus } from "../model/types";
+
+/**
+ * GET /api/v1/analysis/jobs/{jobID} — задача целиком: статус, этап, ошибка и AnalysisResult в result
+ * (во время pending/running result обычно null). 400 — некорректный job_id, 404 — задача не найдена.
+ */
+const getAnalysisJob = async (jobId: string, signal?: AbortSignal) => {
+  const { data } = await apiClient.get<AnalysisJob>(`/api/v1/analysis/jobs/${encodeURIComponent(jobId)}`, { signal });
+
+  return data;
+}
 
 /**
  * События SSE GET /api/v1/analysis/jobs/{jobID}/events (см. openapi.yaml):
@@ -52,4 +63,4 @@ const analysisJobEvents = (jobId: string, { onUpdate, onError }: Params) => {
   return () => source.close();
 }
 
-export { analysisJobEvents, isFinalStatus, JOB_EVENTS };
+export { getAnalysisJob, analysisJobEvents, isFinalStatus, JOB_EVENTS };
