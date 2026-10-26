@@ -1,54 +1,75 @@
 import hashlib
-import json
-import os
-import tempfile
 from pathlib import Path
 
-import fitz
-from fastapi import FastAPI, File, HTTPException, UploadFile
+import pymupdf as fitz
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from .config import CHUNKS_PATH, MAX_UPLOAD_BYTES, PDF_DIR, PROCESSED_DIR
-from .prepare import process_pdf
-from .search import DocumentSearch
+from .config import MAX_UPLOAD_BYTES, EMBEDDING_MODEL
+from .supabase_store import SupabaseDocumentStore
+from analysis_service import VALID_ROLES, run_analysis
 
-app = FastAPI(title="Document Search API", description="PDF retrieval with BM25; no embedding model.", version="1.0.0")
-PDF_DIR.mkdir(parents=True, exist_ok=True)
-PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+app = FastAPI(
+    title="Document Search API",
+    description="PDF retrieval using Supabase Storage and pgvector as the source of truth.",
+    version="1.2.0",
+)
 
-def _load_chunks() -> list[dict]:
-    if not CHUNKS_PATH.exists():
-        return []
-    chunks = []
-    with CHUNKS_PATH.open("r", encoding="utf-8") as file:
-        for line_no, line in enumerate(file, 1):
-            if line.strip():
-                try:
-                    chunks.append(json.loads(line))
-                except json.JSONDecodeError as exc:
-                    raise RuntimeError(f"Invalid JSON in index at line {line_no}") from exc
-    return chunks
+supabase_store: SupabaseDocumentStore | None = None
+supabase_sync_status: dict = {"status": "not_started"}
 
-def _save_chunks(chunks: list[dict]) -> None:
-    CHUNKS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=CHUNKS_PATH.parent, delete=False, suffix=".tmp") as tmp:
-        for chunk in chunks:
-            tmp.write(json.dumps(chunk, ensure_ascii=False) + "\n")
-        temporary_path = Path(tmp.name)
-    os.replace(temporary_path, CHUNKS_PATH)
 
-search_engine = DocumentSearch(_load_chunks())
+@app.on_event("startup")
+def connect_supabase() -> None:
+    """Connect to the authoritative remote store; never fall back to local document data."""
+    global supabase_store, supabase_sync_status
+    try:
+        store = SupabaseDocumentStore()
+        result = store.sync_storage()
+        supabase_store = store
+        supabase_sync_status = {key: value for key, value in result.items() if key != "chunks"}
+        print(
+            f"Supabase index ready: {result['indexed_chunks']} chunks; "
+            f"{result['documents_added']} new PDFs indexed."
+        )
+        if result.get("failures"):
+            print(f"WARNING: some Supabase PDFs could not be indexed: {result['failures']}")
+    except Exception as exc:
+        supabase_store = None
+        supabase_sync_status = {"status": "error", "error": f"{type(exc).__name__}: {exc}"}
+        print(f"ERROR: Supabase connection/index initialization failed: {type(exc).__name__}: {exc}")
+
+
+def _require_store() -> SupabaseDocumentStore:
+    if supabase_store is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Supabase document storage is unavailable. Local document fallback is disabled.",
+        )
+    return supabase_store
+
 
 class SearchRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=20)
 
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "document-search", "indexed_chunks": len(search_engine.chunks), "search_method": "BM25"}
+    status = dict(supabase_sync_status)
+    return {
+        "status": "ok" if status.get("status") == "ok" else "error",
+        "service": "document-search",
+        "indexed_chunks": status.get("indexed_chunks", 0),
+        "search_method": "supabase_pgvector",
+        "embedding_model": EMBEDDING_MODEL,
+        "supabase": status,
+    }
+
 
 @app.post("/documents/upload")
 async def upload_document(file: UploadFile = File(...)):
+    store = _require_store()
     filename = Path(file.filename or "document.pdf").name
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
@@ -67,29 +88,63 @@ async def upload_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="File is not a valid PDF.") from exc
 
     document_id = hashlib.sha256(content).hexdigest()
-    if any(c.get("document_id") == document_id for c in search_engine.chunks):
-        return {"status": "already_indexed", "document_id": document_id, "filename": filename, "chunks_added": 0}
-
-    stored_path = PDF_DIR / f"{document_id}.pdf"
-    stored_path.write_bytes(content)
+    if store.document_exists(document_id):
+        return {
+            "status": "already_indexed",
+            "document_id": document_id,
+            "filename": filename,
+            "chunks_added": 0,
+            "storage": "supabase",
+        }
     try:
-        new_chunks = process_pdf(stored_path, document_id=document_id)
-        if not new_chunks:
-            stored_path.unlink(missing_ok=True)
-            raise HTTPException(status_code=422, detail="No readable text was extracted from this PDF.")
-        for chunk in new_chunks:
-            chunk["source"] = filename
-        combined = search_engine.chunks + new_chunks
-        _save_chunks(combined)
-        search_engine.replace_chunks(combined)
-    except HTTPException:
-        raise
+        new_chunks, document_id = store.index_uploaded_pdf(filename, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
-        stored_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Failed to process PDF: {type(exc).__name__}") from exc
-    return {"status": "indexed", "document_id": document_id, "filename": filename, "pages": len({c["page_start"] for c in new_chunks}), "chunks_added": len(new_chunks), "search_method": "BM25"}
+    return {
+        "status": "indexed",
+        "document_id": document_id,
+        "filename": filename,
+        "pages": len({chunk["page_start"] for chunk in new_chunks}),
+        "chunks_added": len(new_chunks),
+        "storage": "supabase",
+        "search_method": "supabase_pgvector",
+        "embedding_model": EMBEDDING_MODEL,
+    }
+
 
 @app.post("/documents/search")
 def search_documents(request: SearchRequest):
-    results = search_engine.search(request.question, request.top_k)
-    return {"question": request.question, "count": len(results), "search_method": "BM25", "results": results}
+    store = _require_store()
+    try:
+        results = store.search(request.question, request.top_k)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Document search failed: {type(exc).__name__}") from exc
+    return {
+        "question": request.question,
+        "count": len(results),
+        "search_method": "supabase_pgvector",
+        "embedding_model": EMBEDDING_MODEL,
+        "results": results,
+    }
+
+
+class AnalysisRequest(BaseModel):
+    job_id: str = Field(min_length=1, max_length=128)
+    company_id: str = Field(min_length=1, max_length=128)
+    role: str = Field(min_length=1, max_length=64)
+
+
+@app.post("/analysis/jobs", status_code=202)
+def start_analysis(request: AnalysisRequest, background_tasks: BackgroundTasks):
+    store = _require_store()
+    role = request.role.strip().lower()
+    if role not in VALID_ROLES:
+        raise HTTPException(status_code=422, detail={
+            "message": "Unsupported role", "allowed_roles": sorted(VALID_ROLES)
+        })
+    background_tasks.add_task(
+        run_analysis, request.job_id, request.company_id.strip(), role, store
+    )
+    return {"job_id": request.job_id, "status": "accepted"}

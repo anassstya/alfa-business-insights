@@ -30,14 +30,26 @@ services:
     container_name: ml
     ports:
       - "8000:8000"
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:?SUPABASE_URL_is_required}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:?SUPABASE_SERVICE_KEY_is_required}
+      SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-reference-pdfs}
+      SUPABASE_REINDEX_PDFS: ${SUPABASE_REINDEX_PDFS:-false}
+      DATABASE_URL: ${DATABASE_URL:-}
+      POSTGRES_USER: ${POSTGRES_USER:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-}
+      POSTGRES_HOST: ${POSTGRES_HOST:-localhost}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      MODEL_NAME: ${MODEL_NAME:-deepseek/deepseek-v4.1-flash}
+      BACKEND_EVENTS_URL: ${BACKEND_EVENTS_URL:-http://backend:8080/api/v1/internal/analysis/events}
     volumes:
-      - ml_data:/app/data
       - model_cache:/models/huggingface
     networks:
       - hack_network
 
 volumes:
-  ml_data:
   model_cache:
 
 networks:

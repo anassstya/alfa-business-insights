@@ -7,4 +7,10 @@ numpy
 fastapi
 uvicorn[standard]
 python-multipart
-rank-bm25
+pandas
+sqlalchemy
+httpx
+psycopg[binary]
+
+sentence-transformers
+scikit-learn

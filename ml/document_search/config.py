@@ -1,13 +1,7 @@
 import os
 import shutil
-from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-DATA_DIR = Path(os.getenv("ML_DATA_DIR", str(BASE_DIR / "data")))
-PDF_DIR = DATA_DIR / "reference_pdfs"
-PROCESSED_DIR = DATA_DIR / "processed"
-CHUNKS_PATH = PROCESSED_DIR / "document_chunks.jsonl"
-
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-small")
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 120
 MIN_TEXT_LENGTH = 50

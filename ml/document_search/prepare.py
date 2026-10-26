@@ -2,7 +2,7 @@ import hashlib
 import re
 from pathlib import Path
 
-import fitz
+import pymupdf as fitz
 import pytesseract
 from PIL import Image
 
@@ -29,17 +29,122 @@ def _clean_text(text: str) -> str:
     return text.strip()
 
 
+_CAPTION_RE = re.compile(
+    r"(?i)^\s*(таблица|табл\.?|рисунок|рис\.?|диаграмма|график|figure|table|chart|"
+    r"источник:|источники:|source:|примечание:)"
+)
+_SOURCE_RE = re.compile(r"(?i)^\s*(источник|источники|source|sources)\s*:")
+_LEGAL_PATTERNS = (
+    "все права защищены",
+    "генеральная лицензия цб рф",
+    "исключительной собственностью альфа-банка",
+    "несанкционированное копирование",
+    "не предназначен для распространения",
+    "не предназначен для распространения среди частных инвесторов",
+    "должны провести собственное исследование",
+    "обсудить со своими финансовыми консультантами",
+)
+
+
+def _is_boilerplate(text: str) -> bool:
+    normalized = re.sub(r"\s+", " ", text.casefold()).strip()
+    if not normalized:
+        return True
+    if _SOURCE_RE.match(normalized):
+        return True
+    return any(phrase in normalized for phrase in _LEGAL_PATTERNS)
+
+
+def _looks_like_non_prose(text: str) -> bool:
+    """Reject standalone chart/table labels while keeping prose with useful numbers."""
+    text = _clean_text(text)
+    if not text or _is_boilerplate(text):
+        return True
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return True
+    if len(lines) == 1 and _CAPTION_RE.match(lines[0]):
+        return True
+
+    words = re.findall(r"[^\W\d_]+", text, flags=re.UNICODE)
+    if len(words) < 7 and len(text) < 75:
+        return True
+
+    # OCR from charts tends to contain many short labels, month names, and numbers.
+    if len(lines) >= 3:
+        short_lines = sum(len(line) <= 32 for line in lines) / len(lines)
+        if short_lines >= 0.75 and len(words) < 28:
+            return True
+
+    letters = sum(ch.isalpha() for ch in text)
+    visible = sum(not ch.isspace() for ch in text)
+    if visible and letters / visible < 0.42:
+        return True
+
+    # A long connected paragraph is valuable even when it contains percentages or dates.
+    return False
+
+
+def _filter_prose_blocks(blocks) -> str:
+    kept = []
+    for block in blocks:
+        if len(block) < 5 or not isinstance(block[4], str):
+            continue
+        text = _clean_text(block[4])
+        if len(text) < 45 or _looks_like_non_prose(text):
+            continue
+        kept.append(text)
+    return _clean_text("\n\n".join(kept))
+
+
+def _ocr_prose(image: Image.Image) -> str:
+    """OCR page, group words into paragraph-like blocks, and keep prose only."""
+    data = pytesseract.image_to_data(
+        image,
+        lang=OCR_LANGUAGE,
+        output_type=pytesseract.Output.DICT,
+        config="--psm 3",
+    )
+    grouped = {}
+    count = len(data.get("text", []))
+    for i in range(count):
+        word = (data["text"][i] or "").strip()
+        try:
+            confidence = float(data["conf"][i])
+        except (TypeError, ValueError):
+            confidence = -1
+        if not word or confidence < 20:
+            continue
+        key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
+        grouped.setdefault(key, []).append(word)
+
+    lines_by_paragraph = {}
+    for (block_num, par_num, line_num), words in sorted(grouped.items()):
+        key = (block_num, par_num)
+        lines_by_paragraph.setdefault(key, []).append(" ".join(words))
+
+    kept = []
+    for lines in lines_by_paragraph.values():
+        paragraph = _clean_text("\n".join(lines))
+        if len(paragraph) < 45 or _looks_like_non_prose(paragraph):
+            continue
+        kept.append(paragraph)
+    return _clean_text("\n\n".join(kept))
+
+
 def _page_text(page) -> tuple[str, str]:
-    text = _clean_text(page.get_text("text"))
+    # Prefer embedded text when available; scanned PDFs use layout-aware OCR blocks.
+    text = _filter_prose_blocks(page.get_text("blocks"))
     if len(text.replace("\n", " ")) >= MIN_TEXT_LENGTH:
         return text, "text"
     try:
         pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
         image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        return _clean_text(pytesseract.image_to_string(image, lang=OCR_LANGUAGE)), "ocr"
+        filtered = _ocr_prose(image)
+        return (filtered, "ocr") if filtered else (text, "text")
     except Exception:
         return text, "text"
-
 
 def _split_long_sentence(sentence: str, max_chars: int) -> list[str]:
     """Hard fallback for an unusually long sentence; split only at word boundaries."""
