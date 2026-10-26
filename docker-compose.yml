@@ -3,11 +3,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # VITE_* встраиваются в бандл при сборке, поэтому передаём их как build args (значения — из корневого .env)
+      args:
+        VITE_API_URL: ${VITE_API_URL:?API_URL_REQUIRED}
     container_name: frontend
     ports:
       - "3000:3000"
-    environment:
-      VITE_API_URL: ${VITE_API_URL:?API_URL_REQUIRED}
     networks:
       - hack_network
 
