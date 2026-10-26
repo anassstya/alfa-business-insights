@@ -63,3 +63,7 @@ callback timeout 5 секунд. Резервные ML_BACKEND_URL / ML_BACKEND_
 читает роли из БД; frontend отвечает; ключ LLM принят; callback с общим токеном
 проходит авторизацию (404 для отсутствующего задания). 67 тестов проходят
 на хосте и в Docker. Полный live-анализ компании этой проверкой не запускался.
+
+Банковские PDF подключаются автоматически при наличии SUPABASE_URL и
+SUPABASE_SERVICE_KEY; bucket задаётся SUPABASE_STORAGE_BUCKET (reference-pdfs).
+Это отдельные ключи API Supabase, не Postgres credentials. [Инструкция](BANK_PDF_INTEGRATION.md).

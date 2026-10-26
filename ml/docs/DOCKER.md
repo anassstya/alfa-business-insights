@@ -66,3 +66,8 @@ Supabase и Tavily. В образ включены модуль и prompt чат
 в `analysis_jobs`. [Подключение чата](CHAT_INTEGRATION.md).
 
 Формат вызова и callback: [BACKEND_INTEGRATION.md](BACKEND_INTEGRATION.md).
+
+PDF-инструмент включён в тот же образ: CPU PyTorch/e5, PyMuPDF и Tesseract rus/eng.
+78 тестов прошли в обновлённом образе; настоящие embeddings проверены (384).
+Health показывает bank_research_configured: это наличие API-настроек, не проверка
+самого индекса. [Настройка PDF](BANK_PDF_INTEGRATION.md).

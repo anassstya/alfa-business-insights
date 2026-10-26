@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from .budget import BudgetExceeded, BudgetManager
+from .bank_research import enrich_with_timeout
 from .api import ModelError
 from .contracts import AnalysisRequest, AnalysisResult, StageEvent, VERSION
 from .exposures import RULE_VERSION
@@ -23,14 +24,16 @@ def make_scope(request: AnalysisRequest, *, model: str, provider: str,
 
 
 class WebAnalysisPipeline:
-    def __init__(self, research: ResearchPipeline, context_repository):
+    def __init__(self, research: ResearchPipeline, context_repository, bank_provider=None):
         self.research = research
         self.context_repository = context_repository
+        self.bank_provider = bank_provider
 
     def analyze(self, request: AnalysisRequest, on_event=None, *,
                 budget: BudgetManager | None = None) -> AnalysisResult:
         request = AnalysisRequest.model_validate(request)
-        budget = budget or BudgetManager()
+        # Six web tasks retain their original allowance; bank retrieval gets one extra call.
+        budget = budget or BudgetManager(max_tool_calls=7)
         run_id = uuid4()
         trace, warnings = [], []
         profile = context = None
@@ -81,6 +84,30 @@ class WebAnalysisPipeline:
                 emit("completed", "failed", "All web sources unavailable")
                 return AnalysisResult(**common, outcome="failed", profile_snapshot=profile,
                                       warnings=warnings, trace=trace, usage=budget.usage())
+            if self.bank_provider is not None:
+                emit('retrieving', 'started', 'Retrieving supplementary bank PDF context')
+                try:
+                    bank = enrich_with_timeout(self.bank_provider, request, profile, context, budget)
+                    available = max(0, 48 - len(context.evidence))
+                    if len(bank.evidence) > available:
+                        warnings.append('bank_evidence_context_limit')
+                    bank = bank.model_copy(update={'evidence': bank.evidence[:available]}, deep=True)
+                    bank.coverage['matches'] = len(bank.evidence)
+                    context = context.model_copy(update={
+                        'evidence': context.evidence + bank.evidence,
+                        'coverage': {**context.coverage, 'bank_research': bank.coverage},
+                        'gaps': list(dict.fromkeys(context.gaps + bank.gaps))[:30],
+                        'versions': {**context.versions, **bank.versions}}, deep=True)
+                    try:
+                        self.context_repository.replace_alfa_analytics(request.company_id, bank, scope)
+                    except ResearchContextStoreError as exc:
+                        warnings.append('bank_context_save_failed:' + type(exc).__name__)
+                    emit('retrieving', 'completed', 'Bank PDF context added', bank_evidence=len(bank.evidence))
+                except BudgetExceeded:
+                    raise
+                except Exception as exc:
+                    warnings.append('bank_research_unavailable:' + type(exc).__name__)
+                    emit('retrieving', 'skipped', 'Bank PDF context unavailable; continuing web analysis')
             emit("analyzing", "started", "Building source-grounded impacts")
             insights, rejected = build_insights(request, profile, context, self.research.model, budget)
             emit("analyzing", "completed", "Impact candidates built", insights=len(insights))

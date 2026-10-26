@@ -37,7 +37,8 @@ def utf8_chunks(value: str):
 def update_jsonb(engine, *, table: str, column: str, where: str, params: dict,
                  document: str, destination: str | None = None):
     """Internal storage helper; SQL predicates come only from repository constants."""
-    targets = {("company_contexts", "payload", "web_research"): "company_id"}
+    targets = {("company_contexts", "payload", name): "company_id"
+               for name in ("web_research", "alfa_analytics")}
     returning = targets.get((table, column, destination))
     if returning is None:
         raise ValueError("unsupported JSONB storage target")

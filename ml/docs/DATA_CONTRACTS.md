@@ -7,7 +7,7 @@
 | `companies` | Числовой `id`, строковый `synthetic_u` и данные компании. | ML читает для проверки идентификаторов. |
 | `company_contexts.payload.base_information` | Готовый базовый профиль компании. | ML читает; не пересчитывает при каждом запросе. |
 | `company_contexts.payload.web_research` | Актуальное веб-исследование: context, scope, refreshed_at. | ML читает и заменяет блок при обновлении. |
-| `company_contexts.payload.alfa_analytics` | Место для будущего контекста банковских PDF. | Пока не используется pipeline. |
+| `company_contexts.payload.alfa_analytics` | Текущий PDF-контекст, найденный инструментом банковской аналитики. | ML заменяет блок после PDF-поиска. |
 | `analysis_jobs.result` | Полный результат отдельного запуска: инсайты, источники и снимки контекста. | Создаёт и записывает backend. |
 | `ml/.cache/web` | Прочитанные тексты, метаданные и локальный поиск evidence. | ML; в Docker хранится в volume. |
 | `ml/.cache/callbacks` | Финальные события, ожидающие повторной доставки. | ML; не замена таблице заданий. |

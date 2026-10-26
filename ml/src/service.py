@@ -27,6 +27,7 @@ from .profile_repository import (AmbiguousCompanyIdentity, CompanyNotFound, Prof
                                  SupabaseCompanyProfileRepository, ROOT)
 from .research_pipeline import ResearchPipeline
 from .research_context_repository import SupabaseResearchContextRepository
+from .bank_research import configured_bank_provider
 from .web_pipeline import WebAnalysisPipeline
 from .web_research import FileEvidenceStore, HTTPDocumentFetcher, TavilySearchProvider, search_news
 
@@ -43,6 +44,7 @@ class ServiceSettings:
         self.fixture_mode = _enabled(environ.get("ML_FIXTURE_MODE"))
         self.local_dev_mode = _enabled(environ.get("ML_LOCAL_DEV_MODE"))
         self.service_token = environ.get("ML_SERVICE_TOKEN") or None
+        self.bank_research_configured = bool(environ.get('SUPABASE_URL') and environ.get('SUPABASE_SERVICE_KEY'))
         self.callback = CallbackSettings.from_environment(environ)
         self.evidence_cache = Path(environ.get("ML_EVIDENCE_CACHE") or
                                    Path(__file__).resolve().parents[1] / ".cache" / "web")
@@ -66,7 +68,8 @@ def create_app(*, settings: ServiceSettings | None = None,
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "fixture_mode": settings.fixture_mode}
+        return {"status": "ok", "fixture_mode": settings.fixture_mode,
+                "bank_research_configured": settings.bank_research_configured}
 
     def authorize(request: Request, authorization: str | None = Header(default=None)):
         supplied = authorization.removeprefix("Bearer ") if authorization else ""
@@ -93,7 +96,8 @@ def create_app(*, settings: ServiceSettings | None = None,
                 model = GatewayClient(ModelSettings.from_environment())
                 research = ResearchPipeline(repository, model, news_provider or TavilySearchProvider(),
                                             document_fetcher or HTTPDocumentFetcher(), store)
-                runner = WebAnalysisPipeline(research, SupabaseResearchContextRepository(repository.engine))
+                runner = WebAnalysisPipeline(research, SupabaseResearchContextRepository(repository.engine),
+                                         bank_provider=configured_bank_provider())
                 return runner.analyze(body, on_event=on_event)
             finally:
                 repository.close()
@@ -182,6 +186,8 @@ def create_app(*, settings: ServiceSettings | None = None,
         record, text = found
         return {"record": record, "text": text}
 
+    from ml.document_search.api import create_document_router
+    app.include_router(create_document_router(authorize))
     return app
 
 

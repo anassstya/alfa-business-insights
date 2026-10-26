@@ -10,6 +10,7 @@ from .profile_repository import JsonCompanyProfileRepository
 from .profile_repository import SupabaseCompanyProfileRepository
 from .research_context_repository import SupabaseResearchContextRepository
 from .research_pipeline import ResearchPipeline
+from .bank_research import configured_bank_provider
 from .web_pipeline import WebAnalysisPipeline
 from .api import GatewayClient, ModelSettings
 from .backend_callback import (
@@ -37,7 +38,8 @@ def main() -> None:
             model = GatewayClient(ModelSettings.from_environment())
             store = FileEvidenceStore(Path(__file__).resolve().parents[1] / ".cache" / "web")
             research = ResearchPipeline(repo, model, TavilySearchProvider(), HTTPDocumentFetcher(), store)
-            runner = WebAnalysisPipeline(research, SupabaseResearchContextRepository(repo.engine))
+            runner = WebAnalysisPipeline(research, SupabaseResearchContextRepository(repo.engine),
+                                         bank_provider=configured_bank_provider())
             return runner.analyze(request, on_event)
         finally:
             repo.close()

@@ -18,6 +18,7 @@ from .pipeline import AnalysisPipeline
 from .profile_repository import ROOT, JsonCompanyProfileRepository, SupabaseCompanyProfileRepository
 from .research_context_repository import SupabaseResearchContextRepository
 from .research_pipeline import ResearchPipeline
+from .bank_research import configured_bank_provider
 from .web_pipeline import WebAnalysisPipeline
 from .web_research import FileEvidenceStore, HTTPDocumentFetcher, TavilySearchProvider
 
@@ -86,7 +87,8 @@ def _analyze_company(body: CompanyAnalysisInput, *, fixture_mode: bool | None = 
                 TavilySearchProvider(), HTTPDocumentFetcher(),
                 FileEvidenceStore(evidence_cache or ROOT / "ml/.cache/web"),
             )
-            runner = WebAnalysisPipeline(research, SupabaseResearchContextRepository(repository.engine))
+            runner = WebAnalysisPipeline(research, SupabaseResearchContextRepository(repository.engine),
+                                         bank_provider=configured_bank_provider())
             return runner.analyze(request, on_event=on_event)
 
         return analyze_with_callback(request, run, callback)
