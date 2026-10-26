@@ -1,4 +1,4 @@
-"""Internal HTTP transport for the fixture pipeline. ml.src.api is the LLM client."""
+"""Internal HTTP transport for analysis and session chat. api.py is the LLM client."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Mapping
 
-from dotenv import load_dotenv
+from .runtime_environment import load_runtime_environment
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
 from .contracts import AnalysisRequest, AnalysisResult, CompanyResearchContext, SearchTask
@@ -27,6 +27,7 @@ from .profile_repository import (AmbiguousCompanyIdentity, CompanyNotFound, Prof
                                  SupabaseCompanyProfileRepository, ROOT)
 from .research_pipeline import ResearchPipeline
 from .research_context_repository import SupabaseResearchContextRepository
+from .bank_research import configured_bank_provider
 from .web_pipeline import WebAnalysisPipeline
 from .web_research import FileEvidenceStore, HTTPDocumentFetcher, TavilySearchProvider, search_news
 
@@ -38,11 +39,12 @@ def _enabled(value: str | None) -> bool:
 class ServiceSettings:
     def __init__(self, environ: Mapping[str, str] | None = None):
         if environ is None:
-            load_dotenv(ROOT / ".env", override=False)
+            load_runtime_environment()
             environ = os.environ
         self.fixture_mode = _enabled(environ.get("ML_FIXTURE_MODE"))
         self.local_dev_mode = _enabled(environ.get("ML_LOCAL_DEV_MODE"))
         self.service_token = environ.get("ML_SERVICE_TOKEN") or None
+        self.bank_research_configured = bool(environ.get('SUPABASE_URL') and environ.get('SUPABASE_SERVICE_KEY'))
         self.callback = CallbackSettings.from_environment(environ)
         self.evidence_cache = Path(environ.get("ML_EVIDENCE_CACHE") or
                                    Path(__file__).resolve().parents[1] / ".cache" / "web")
@@ -66,7 +68,8 @@ def create_app(*, settings: ServiceSettings | None = None,
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "fixture_mode": settings.fixture_mode}
+        return {"status": "ok", "fixture_mode": settings.fixture_mode,
+                "bank_research_configured": settings.bank_research_configured}
 
     def authorize(request: Request, authorization: str | None = Header(default=None)):
         supplied = authorization.removeprefix("Bearer ") if authorization else ""
@@ -93,7 +96,8 @@ def create_app(*, settings: ServiceSettings | None = None,
                 model = GatewayClient(ModelSettings.from_environment())
                 research = ResearchPipeline(repository, model, news_provider or TavilySearchProvider(),
                                             document_fetcher or HTTPDocumentFetcher(), store)
-                runner = WebAnalysisPipeline(research, SupabaseResearchContextRepository(repository.engine))
+                runner = WebAnalysisPipeline(research, SupabaseResearchContextRepository(repository.engine),
+                                         bank_provider=configured_bank_provider())
                 return runner.analyze(body, on_event=on_event)
             finally:
                 repository.close()
@@ -154,7 +158,8 @@ def create_app(*, settings: ServiceSettings | None = None,
             raise HTTPException(413, detail={"code": "chat_context_too_large"}) from exc
         except (SessionStoreUnavailable, ProfileStoreUnavailable) as exc:
             raise HTTPException(503, detail={"code": "session_store_unavailable",
-                                "message": "Check backend result endpoint; in supabase mode check SELECT permission"}) from exc
+                                "message": "Check database availability and analysis_jobs SELECT permission; "
+                                           "in backend mode check the result endpoint"}) from exc
         except ModelFormatError as exc:
             raise HTTPException(502, detail={"code": "chat_answer_invalid"}) from exc
         except (ModelError, BudgetExceeded) as exc:
@@ -181,6 +186,8 @@ def create_app(*, settings: ServiceSettings | None = None,
         record, text = found
         return {"record": record, "text": text}
 
+    from ml.document_search.api import create_document_router
+    app.include_router(create_document_router(authorize))
     return app
 
 

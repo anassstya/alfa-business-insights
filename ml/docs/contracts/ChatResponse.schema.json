@@ -1,0 +1,131 @@
+{
+  "$defs": {
+    "ChatSource": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Url"
+        },
+        "publisher": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Publisher"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Published At"
+        },
+        "page_number": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Page Number"
+        },
+        "quote": {
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "title",
+        "url",
+        "publisher",
+        "published_at",
+        "page_number",
+        "quote"
+      ],
+      "title": "ChatSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "answer": {
+      "maxLength": 8000,
+      "minLength": 1,
+      "title": "Answer",
+      "type": "string"
+    },
+    "insight_refs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 5,
+      "title": "Insight Refs",
+      "type": "array"
+    },
+    "evidence_refs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 48,
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "insufficient_context": {
+      "default": false,
+      "title": "Insufficient Context",
+      "type": "boolean"
+    },
+    "job_id": {
+      "format": "uuid",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/ChatSource"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "mode": {
+      "const": "saved_analysis",
+      "default": "saved_analysis",
+      "title": "Mode",
+      "type": "string"
+    }
+  },
+  "required": [
+    "answer",
+    "job_id"
+  ],
+  "title": "ChatResponse",
+  "type": "object"
+}

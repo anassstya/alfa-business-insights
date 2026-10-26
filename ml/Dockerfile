@@ -4,13 +4,30 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# CPU-only embeddings and OCR support for bank PDFs.
+ENV HF_HOME=/app/ml/.cache/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/app/ml/.cache/huggingface
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY requirements.txt /app/ml/requirements.txt
-RUN python -m pip install --no-cache-dir -r /app/ml/requirements.txt
+
+ENV PIP_DEFAULT_TIMEOUT=180 \
+    PIP_RETRIES=10
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.7.1+cpu"
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install -r /app/ml/requirements.txt
 
 COPY src /app/ml/src
 COPY fixtures /app/ml/fixtures
 COPY prompts /app/ml/prompts
+COPY document_search /app/ml/document_search
+COPY analysis_service.py /app/ml/analysis_service.py
 RUN groupadd --gid 10001 mlapp \
     && useradd --uid 10001 --gid mlapp --no-create-home mlapp \
     && mkdir -p /app/ml/.cache/web /app/ml/.cache/callbacks \
