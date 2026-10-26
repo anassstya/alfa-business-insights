@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  AnalysisStageLoader, ChatMessageItem, useAnalysisResult, useChatMessages, useSendChatMessage,
+  AnalysisStageLoader, ChatMessageItem, useAnalysisResult, useChatMessages, useIsChatAvailable, useSendChatMessage,
 } from "@/entities/job";
 import { Button, SubmitField, Title } from "@/shared";
 import { AnalysisPreview } from "./AnalysisPreview";
@@ -40,19 +40,19 @@ const Chat = ({ jobId, onRunningChange, onRestart }: ChatProps) => {
     return () => onRunningChange?.(false);
   }, [isRunning, onRunningChange])
 
-  /** Чат доступен только по завершённому анализу (result есть только у completed) */
-  const chatJobId = result ? jobId : undefined;
-  // сообщения сессии: история с сервера, затем новые — по chat/events; до завершения анализа не грузим
-  const chat = useChatMessages(chatJobId);
+  /** Чат доступен только по завершённому анализу; до этого хуки чата к backend не подключаются */
+  const isChatAvailable = useIsChatAvailable(jobId);
+  // сообщения сессии: история с сервера, затем новые — по chat/events
+  const chat = useChatMessages(jobId);
   const messages = chat.data ?? [];
   // отправка — мутация POST chat/messages
-  const send = useSendChatMessage(chatJobId);
-  const canAsk = !!chatJobId && chat.isSuccess;
+  const send = useSendChatMessage(jobId);
+  const canAsk = isChatAvailable && chat.isSuccess;
 
   const getLockedHint = () => {
     if (!jobId) return 'Запустите анализ или выберите сессию в «Мои отчёты»';
     if (isError) return 'Чат недоступен: анализ не удался';
-    if (!result) return 'Чат станет доступен после завершения анализа';
+    if (!isChatAvailable) return 'Чат станет доступен после завершения анализа';
     return null;
   }
   const lockedHint = getLockedHint();
@@ -102,7 +102,7 @@ const Chat = ({ jobId, onRunningChange, onRestart }: ChatProps) => {
 
         <Messages ref={listRef} role="log" aria-live="polite">
           {lockedHint && <Hint>{lockedHint}</Hint>}
-          {chat.isPending && chatJobId && <Hint>Загружаем сообщения…</Hint>}
+          {chat.isPending && isChatAvailable && <Hint>Загружаем сообщения…</Hint>}
           {chat.isError && <ErrorText role="alert">Не удалось загрузить сообщения сессии</ErrorText>}
           {canAsk && messages.length === 0 && <Hint>Задайте вопрос по результатам анализа</Hint>}
           {messages.map(message => <ChatMessageItem key={message.id} message={message} />)}
@@ -111,7 +111,7 @@ const Chat = ({ jobId, onRunningChange, onRestart }: ChatProps) => {
 
         <Footer>
           <SubmitField
-            placeholder={chatJobId ? 'Спросите про анализ' : 'Чат станет доступен после анализа'}
+            placeholder={isChatAvailable ? 'Спросите про анализ' : 'Чат станет доступен после анализа'}
             submitLabel="Отправить сообщение"
             isLoading={send.isPending}
             disabled={!canAsk}

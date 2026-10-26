@@ -70,7 +70,7 @@ const AnalysisPage = () => {
         </MainColumn>
         {jobId && (
           <ChatAside>
-            <AnalysisChat key={jobId} jobId={jobId} disabled={!result} />
+            <AnalysisChat key={jobId} jobId={jobId} />
           </ChatAside>
         )}
       </Layout>

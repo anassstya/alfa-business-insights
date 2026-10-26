@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
-import { ChatBubble, ChatMessageItem, useChatMessages, useSendChatMessage } from "@/entities/job";
+import {
+  ChatBubble, ChatMessageItem, useChatMessages, useIsChatAvailable, useSendChatMessage,
+} from "@/entities/job";
 import { Chip, SubmitField } from "@/shared";
 import {
   ChatHeader, ChatRoot, ChatSubtitle, ChatTitle, Composer, Empty, EmptyText, Messages, RetryButton,
@@ -14,22 +16,20 @@ const SUGGESTIONS = [
 
 interface AnalysisChatProps {
   jobId: string;
-  /** чат недоступен, пока анализ не завершён (нет результата) */
-  disabled?: boolean;
 }
 
 /**
  * Чат с ассистентом по результатам анализа. История — с сервера (GET chat/messages),
  * новые сообщения — по chat/events, отправка — мутация POST chat/messages.
+ * Пока анализ не завершён, чат закрыт: хуки чата сами не подключаются к backend.
  */
-const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
+const AnalysisChat = ({ jobId }: AnalysisChatProps) => {
   const listRef = useRef<HTMLDivElement>(null);
-  // до завершения анализа историю не грузим и на chat/events не подписываемся
-  const chatJobId = disabled ? undefined : jobId;
-  const chat = useChatMessages(chatJobId);
+  const isAvailable = useIsChatAvailable(jobId);
+  const chat = useChatMessages(jobId);
   const messages = chat.data ?? [];
-  const send = useSendChatMessage(chatJobId);
-  const blocked = disabled || !chat.isSuccess;
+  const send = useSendChatMessage(jobId);
+  const blocked = !isAvailable || !chat.isSuccess;
 
   // новые сообщения и индикатор отправки всегда в зоне видимости
   useEffect(() => {
@@ -57,8 +57,8 @@ const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
       </ChatHeader>
 
       <Messages ref={listRef} role="log" aria-live="polite">
-        {disabled && <EmptyText>Чат станет доступен после завершения анализа</EmptyText>}
-        {chat.isPending && !disabled && <EmptyText>Загружаем сообщения…</EmptyText>}
+        {!isAvailable && <EmptyText>Чат станет доступен после завершения анализа</EmptyText>}
+        {chat.isPending && isAvailable && <EmptyText>Загружаем сообщения…</EmptyText>}
 
         {chat.isError && (
           <ChatBubble $author="assistant" $error role="alert">
@@ -98,7 +98,7 @@ const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
 
       <Composer>
         <SubmitField
-          placeholder={disabled ? 'Чат станет доступен после анализа' : 'Спросите про аналитику'}
+          placeholder={!isAvailable ? 'Чат станет доступен после анализа' : 'Спросите про аналитику'}
           submitLabel="Отправить сообщение"
           isLoading={send.isPending}
           disabled={blocked}
