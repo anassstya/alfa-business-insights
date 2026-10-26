@@ -233,6 +233,14 @@ func (r *AnalysisRepository) UpdateFromEvent(
 				WHEN status IN ('completed', 'failed') THEN error_message
 				ELSE COALESCE($5::text, error_message)
 			END,
+			dispatched_at = CASE
+				WHEN status IN ('completed', 'failed') THEN dispatched_at
+				ELSE COALESCE(dispatched_at, clock_timestamp())
+			END,
+			recovery_deadline = CASE
+				WHEN status IN ('completed', 'failed') THEN recovery_deadline
+				ELSE COALESCE(recovery_deadline, clock_timestamp() + INTERVAL '7 minutes')
+			END,
 			updated_at = CASE
 				WHEN status IN ('completed', 'failed') THEN updated_at
 				ELSE NOW()

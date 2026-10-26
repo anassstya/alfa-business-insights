@@ -13,7 +13,6 @@ import (
 
 	"alfa-business-insights/backend/mlclient"
 	"alfa-business-insights/backend/model"
-	"alfa-business-insights/backend/repo"
 )
 
 var (
@@ -23,15 +22,21 @@ var (
 	ErrAnalysisNotFound = errors.New("analysis not found")
 )
 
-type AnalysisService struct {
-	repo *repo.AnalysisRepository
-	ml   *mlclient.Client
+type AnalysisRepository interface {
+	RoleExists(context.Context, string) (bool, error)
+	GetCompanySyntheticU(context.Context, int64, *int64) (string, bool, error)
+	Create(context.Context, model.AnalysisJob) error
+	GetByID(context.Context, string) (*model.AnalysisJob, error)
+	ListByDemoUserID(context.Context, int64) ([]model.AnalysisJobSummary, error)
+	UpdateFromEvent(context.Context, string, model.AnalysisStatus, *model.AnalysisStage, json.RawMessage, *string) (bool, error)
 }
 
-func NewAnalysisService(
-	r *repo.AnalysisRepository,
-	ml *mlclient.Client,
-) *AnalysisService {
+type AnalysisService struct {
+	repo AnalysisRepository
+	ml   mlclient.Analyzer
+}
+
+func NewAnalysisService(r AnalysisRepository, ml mlclient.Analyzer) *AnalysisService {
 	return &AnalysisService{
 		repo: r,
 		ml:   ml,
@@ -100,14 +105,12 @@ func (s *AnalysisService) StartAnalysis(ctx context.Context, companyID int64, re
 		return "", err
 	}
 
-	go s.runMLAnalysis(job)
-
 	return jobID, nil
 }
 
-func (s *AnalysisService) runMLAnalysis(job model.AnalysisJob) {
+func (s *AnalysisService) runMLAnalysis(parent context.Context, job model.AnalysisJob) {
 	ctx, cancel := context.WithTimeout(
-		context.Background(),
+		parent,
 		6*time.Minute,
 	)
 	defer cancel()
@@ -128,6 +131,9 @@ func (s *AnalysisService) runMLAnalysis(job model.AnalysisJob) {
 			job.ID,
 			err,
 		)
+		if parent.Err() != nil {
+			return
+		}
 		s.failAnalysis(job.ID, err)
 		return
 	}
@@ -246,10 +252,7 @@ func newAnalysisUUID() (string, error) {
 	), nil
 }
 
-func (s *AnalysisService) ListAnalysisJobs(
-	ctx context.Context,
-	demoUserID int64,
-) ([]model.AnalysisJobSummary, error) {
+func (s *AnalysisService) ListAnalysisJobs(ctx context.Context, demoUserID int64) ([]model.AnalysisJobSummary, error) {
 	if demoUserID <= 0 {
 		return nil, ErrInvalidInput
 	}

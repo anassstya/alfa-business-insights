@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 
 	"alfa-business-insights/backend/model"
+	"alfa-business-insights/backend/repo"
 	"alfa-business-insights/backend/service"
 )
 
@@ -76,6 +78,16 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, service.ErrChatJobNotFound):
 			writeChatError(w, http.StatusNotFound, "Аналитическая сессия не найдена")
 
+		case errors.Is(err, service.ErrChatNotReady):
+			writeChatError(w, http.StatusConflict, "Анализ ещё не завершён или завершился ошибкой")
+		case errors.Is(err, repo.ErrChatBusy):
+			writeChatError(w, http.StatusConflict, "Дождитесь ответа на предыдущее сообщение")
+		case errors.Is(err, service.ErrChatUnavailable):
+			writeChatError(w, http.StatusServiceUnavailable, "ML-чат не настроен")
+		case errors.Is(err, context.DeadlineExceeded):
+			writeChatError(w, http.StatusGatewayTimeout, "Превышено время обработки сообщения")
+		case errors.Is(err, service.ErrChatML):
+			writeChatError(w, http.StatusBadGateway, "Не удалось получить корректный ответ ML")
 		default:
 			writeChatError(w, http.StatusInternalServerError, "Не удалось сохранить сообщение")
 		}
@@ -94,7 +106,7 @@ func (h *ChatHandler) StreamChatEvents(w http.ResponseWriter, r *http.Request) {
 	writeChatError(
 		w,
 		http.StatusServiceUnavailable,
-		"Получение ответов ML пока не подключено",
+		"Стриминг чата не используется; ответ доступен через GET истории после POST",
 	)
 }
 

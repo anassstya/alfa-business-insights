@@ -1,0 +1,26 @@
+# Standalone local test stack; never uses DATABASE_URL or the root .env credentials.
+name: alfa-insights-test
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: alfa_insights_test
+      POSTGRES_USER: alfa_test
+      POSTGRES_PASSWORD: local_test_only
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./database/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+      - ./database/migrations/003_demo_users.sql:/docker-entrypoint-initdb.d/003_demo_users.sql:ro
+      - ./database/migrations/004_company_contexts.sql:/docker-entrypoint-initdb.d/004_company_contexts.sql:ro
+      - ./database/migrations/005_analysis_jobs.sql:/docker-entrypoint-initdb.d/005_analysis_jobs.sql:ro
+      - ./database/migrations/006_chat_messages.sql:/docker-entrypoint-initdb.d/006_chat_messages.sql:ro
+      - ./database/migrations/007_analysis_recovery.sql:/docker-entrypoint-initdb.d/007_analysis_recovery.sql:ro
+      - ./database/test/007_seed.sql:/docker-entrypoint-initdb.d/007_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alfa_test -d alfa_insights_test"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
