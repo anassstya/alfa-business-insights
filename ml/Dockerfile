@@ -13,8 +13,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY requirements.txt /app/ml/requirements.txt
-RUN python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch==2.7.1+cpu" \
-    && python -m pip install --no-cache-dir -r /app/ml/requirements.txt
+
+ENV PIP_DEFAULT_TIMEOUT=180 \
+    PIP_RETRIES=10
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.7.1+cpu"
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install -r /app/ml/requirements.txt
 
 COPY src /app/ml/src
 COPY fixtures /app/ml/fixtures

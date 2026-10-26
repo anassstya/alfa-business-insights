@@ -45,7 +45,15 @@ func run() error {
 	)
 	defer cancel()
 
-	db, err := pgxpool.New(ctx, databaseURL)
+	poolConfig, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return fmt.Errorf("parse database config: %w", err)
+	}
+
+	poolConfig.MaxConns = 2
+	poolConfig.MinConns = 0
+
+	db, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return fmt.Errorf("create database pool: %w", err)
 	}
@@ -59,11 +67,19 @@ func run() error {
 
 	workerCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
 	workerRepo := repo.NewAnalysisRepository(db)
 	worker := service.NewAnalysisService(workerRepo, mlClient)
+
 	workerDone := make(chan struct{})
-	go func() { defer close(workerDone); worker.Run(workerCtx, workerRepo) }()
-	defer func() { stop(); <-workerDone }()
+	go func() {
+		defer close(workerDone)
+		worker.Run(workerCtx, workerRepo)
+	}()
+	defer func() {
+		stop()
+		<-workerDone
+	}()
 
 	server := &http.Server{
 		Addr:              ":8080",
@@ -77,19 +93,25 @@ func run() error {
 	go func() {
 		defer close(shutdownDone)
 		<-workerCtx.Done()
+
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			log.Printf("HTTP shutdown: %v", err)
 			server.Close()
 		}
 	}()
+
 	serveErr := server.ListenAndServe()
+
 	stop()
 	<-shutdownDone
+
 	if errors.Is(serveErr, http.ErrServerClosed) {
 		return nil
 	}
+
 	return serveErr
 }
 
