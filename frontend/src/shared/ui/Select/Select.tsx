@@ -1,95 +1,185 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
-import { Input, type InputProps } from "../Input";
-import { OptionStyled, StyledOptionsContainer } from "./Select.styled";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import ChevronIcon from '../../icons/chevron-down.svg?react'
+import CheckIcon from '../../icons/check.svg?react'
+import {
+  Caption, Chevron, Option, OptionDescription, OptionLabel, OptionText,
+  LoadMoreRow, Popover, PopoverMessage, SelectRoot, Trigger, TriggerText, Value,
+} from "./Select.styled";
 
-interface MultiSelectProps {
-  multi?: true;
-  onChange?(value: Array<string>): void
+interface SelectOption<T extends string | number> {
+  value: T;
+  label: string;
+  description?: string;
+  icon?: ReactNode;
 }
 
-interface SelectProps {
-  multi?: false;
-  onChange?(value: string): void
+interface SelectProps<T extends string | number> {
+  options: SelectOption<T>[];
+  value: T | null;
+  onChange(value: T): void;
+  caption?: string;
+  placeholder?: string;
+  loading?: boolean;
+  disabled?: boolean;
+  emptyText?: string;
+  fullWidth?: boolean;
+  selectedLabel?: string;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?(): void;
 }
 
-type OnChangeProps = SelectProps | MultiSelectProps;
+const Select = <T extends string | number>({
+  options,
+  value,
+  onChange,
+  caption,
+  placeholder = 'Выберите',
+  loading = false,
+  disabled = false,
+  emptyText = 'Нет вариантов',
+  fullWidth = false,
+  selectedLabel,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+}: SelectProps<T>) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(-1);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLUListElement>(null);
+  const loadMoreRef = useRef<HTMLLIElement>(null);
+  const listId = useId();
 
-type BaseSelectProps = {
-  options: Array<{
-    value: string;
-    label: string;
-    icon?: ReactNode;
-  }>
-} & OnChangeProps  & Omit<InputProps, 'readOnly' | 'onChange'>
+  const selectedOption = options.find(option => option.value === value);
+  const triggerLabel = selectedOption?.label ?? (value !== null ? selectedLabel : undefined);
 
-const Select = forwardRef<HTMLInputElement, BaseSelectProps>(({options, multi = false, onChange, onFocus, onBlur, ...props}, ref) => {
-  const selectRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  useImperativeHandle(ref, () => selectRef.current!, [])
+  useEffect(() => {
+    if (!isOpen) return;
 
-  const [isOptionsShown, setIsOptionsShown] = useState(false);
-  const [selected, setSelected] = useState<string | Array<string> | undefined>(multi ? [] : '')
-  const [selectedLabel, setLabel] = useState<string>()
-  const safeWidth = useMemo(() => containerRef.current?.getBoundingClientRect().width ?? 0,[])
-  const safeTop = useMemo(() => (containerRef.current?.getBoundingClientRect().top ?? 0) + (containerRef.current?.getBoundingClientRect().height ?? 0) + 4,[])
-  const safeLeft = useMemo(() => containerRef.current?.getBoundingClientRect().left ?? 0,[])
-  const onSelect = useCallback((value: string, label: string) => {
-    if (multi) {
-      if (selected?.includes(value)) {
-        const withoutValue = (selected as string[]).filter(v => v!==value);
-        setSelected(withoutValue)
-        onChange?.(withoutValue)
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
       }
-      setSelected(prev => [...prev, value])
-      onChange?.([...selected, value])
-      setIsOptionsShown(false);
-      
-      return
     }
-    setSelected(value)
-    setLabel(label)
-    setIsOptionsShown(false);
-    onChange?.(value)
-  }, [multi, onChange, selected])
 
-  const isActiveSafe = (value: string) => {
-    console.log(Array.isArray(selected) ? selected.includes(value) : selected === value)
-    return Array.isArray(selected) ? selected.includes(value) : selected === value
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen])
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!isOpen || !hasMore || loadingMore || !target || !onLoadMore) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => entry.isIntersecting && onLoadMore(),
+      { root: popoverRef.current, rootMargin: '0px 0px 120px 0px' },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [isOpen, hasMore, loadingMore, onLoadMore, options.length])
+
+  useEffect(() => {
+    if (!isOpen || highlighted < 0) return;
+
+    popoverRef.current
+      ?.querySelector(`[data-index="${highlighted}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [isOpen, highlighted])
+
+  const open = () => {
+    setHighlighted(Math.max(0, options.findIndex(option => option.value === value)));
+    setIsOpen(true);
   }
-  return (
-    <>
-    <Input
-      readOnly
-      allowClear={false}
-      ref={selectRef}
-      containerElRef={containerRef}
-      onFocus={(e) => {
-        setIsOptionsShown(true);
-        onFocus?.(e);
-      }}
-      onBlur={(e) => {
-        setTimeout(() => setIsOptionsShown(false), 300);
-        onBlur?.(e);
-      }}
-      defaultValue={selectedLabel}
-      {...props}
-    />
-    {isOptionsShown && containerRef.current && (
-      <StyledOptionsContainer width={safeWidth} top={safeTop} left={safeLeft}>
-        {options.map(({value, label, icon}) => (
-          <OptionStyled
-            key={value}
-            active={isActiveSafe(value)}
-            onClick={() => onSelect(value,label)}
-          >
-            {icon}
-            {label}
-          </OptionStyled>
-        ))}
-      </StyledOptionsContainer>
-    )}
-    </>
-  )
-})
 
-export { Select }
+  const select = (option: SelectOption<T>) => {
+    onChange(option.value);
+    setIsOpen(false);
+  }
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (!isOpen) {
+      if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+        event.preventDefault();
+        open();
+      }
+      return;
+    }
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        setHighlighted(prev => Math.min(options.length - 1, prev + 1));
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        setHighlighted(prev => Math.max(0, prev - 1));
+        break;
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        if (options[highlighted]) select(options[highlighted]);
+        break;
+      case 'Escape':
+      case 'Tab':
+        setIsOpen(false);
+        break;
+    }
+  }
+
+  return (
+    <SelectRoot ref={rootRef} $fullWidth={fullWidth}>
+      <Trigger
+        type="button"
+        $open={isOpen}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-controls={listId}
+        onClick={() => isOpen ? setIsOpen(false) : open()}
+        onKeyDown={handleKeyDown}
+      >
+        {selectedOption?.icon}
+        <TriggerText>
+          {caption && <Caption>{caption}</Caption>}
+          <Value $placeholder={!selectedOption}>
+            {triggerLabel ?? (loading ? 'Загрузка…' : placeholder)}
+          </Value>
+        </TriggerText>
+        <Chevron $open={isOpen}><ChevronIcon /></Chevron>
+      </Trigger>
+
+      {isOpen && (
+        <Popover ref={popoverRef} id={listId} role="listbox" aria-busy={loading || loadingMore}>
+          {loading && <PopoverMessage>Загрузка…</PopoverMessage>}
+          {!loading && options.length === 0 && <PopoverMessage>{emptyText}</PopoverMessage>}
+          {!loading && options.map((option, index) => (
+            <Option
+              key={option.value}
+              data-index={index}
+              role="option"
+              aria-selected={option.value === value}
+              $active={option.value === value}
+              $highlighted={index === highlighted}
+              onMouseEnter={() => setHighlighted(index)}
+              onClick={() => select(option)}
+            >
+              {option.icon}
+              <OptionText>
+                <OptionLabel>{option.label}</OptionLabel>
+                {option.description && <OptionDescription>{option.description}</OptionDescription>}
+              </OptionText>
+              <CheckIcon />
+            </Option>
+          ))}
+          {!loading && hasMore && (
+            <LoadMoreRow ref={loadMoreRef} aria-hidden>Загрузка…</LoadMoreRow>
+          )}
+        </Popover>
+      )}
+    </SelectRoot>
+  )
+}
+
+export { Select, type SelectOption, type SelectProps };
