@@ -4,11 +4,28 @@ from __future__ import annotations
 
 import threading
 import time
+import math
+import os
 from dataclasses import dataclass, field
 
 
 class BudgetExceeded(Exception):
     pass
+
+
+DEFAULT_ANALYSIS_TIMEOUT_SECONDS = 600.0
+
+
+def analysis_timeout_seconds() -> float:
+    """Configured deadline for the live web analysis, excluding chat budgets."""
+    raw = os.getenv("ML_ANALYSIS_TIMEOUT_SECONDS", str(DEFAULT_ANALYSIS_TIMEOUT_SECONDS))
+    try:
+        timeout = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("ML_ANALYSIS_TIMEOUT_SECONDS must be a number") from exc
+    if not math.isfinite(timeout) or not 1 <= timeout <= 600:
+        raise ValueError("ML_ANALYSIS_TIMEOUT_SECONDS must be between 1 and 600")
+    return timeout
 
 
 @dataclass

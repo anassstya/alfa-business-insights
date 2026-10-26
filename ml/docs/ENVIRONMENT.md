@@ -55,8 +55,13 @@ docker compose --env-file .env -f ml/docker-compose.yml up -d --build ml
 Tavily-ключ в публичном `docker.env.example` сохранён по запросу владельца.
 
 Defaults не требуется переписывать в env: порт ML 8001, live-режим,
-чат через Supabase, модель deepseek/deepseek-v4.1-flash, timeout модели 60 секунд,
-callback timeout 5 секунд. Резервные ML_BACKEND_URL / ML_BACKEND_TOKEN нужны
+чат через Supabase, модель deepseek/deepseek-v4.1-flash и callback timeout 5 секунд.
+Лимит одного запроса модели по умолчанию `ML_MODEL_TIMEOUT=300` секунд;
+общий лимит live-анализа `ML_ANALYSIS_TIMEOUT_SECONDS=500` секунд. Первый
+ограничивает отдельный вызов LLM, второй — весь live-пайплайн вместе с профилем,
+поиском и генерацией инсайтов. Эти настройки можно переопределить в корневом `.env`.
+Бюджет чата задаётся отдельно и этим параметром не увеличивается.
+Резервные ML_BACKEND_URL / ML_BACKEND_TOKEN нужны
 только при ML_CHAT_RESULT_SOURCE=backend. Основной чат использует Supabase.
 
 Проверено на присланном env: все три контейнера запущены; ML healthy; backend
