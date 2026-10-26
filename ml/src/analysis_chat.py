@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
 
 import httpx
-from dotenv import load_dotenv
+from .runtime_environment import load_runtime_environment
 from pydantic import Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -38,7 +39,17 @@ class ChatContextTooLarge(Exception):
 
 class ChatTurn(Contract):
     role: Literal['user', 'assistant']
-    content: str = Field(min_length=1, max_length=4000)
+    content: str = Field(min_length=1, max_length=8000)
+    # Accept the existing backend ChatMessage JSON without dropping its metadata.
+    id: UUID | None = None
+    created_at: datetime | None = None
+
+    @field_validator('content')
+    @classmethod
+    def nonblank(cls, value):
+        if not value.strip():
+            raise ValueError('history content must not be blank')
+        return value.strip()
 
 
 class ChatRequest(Contract):
@@ -60,11 +71,42 @@ class ChatAnswer(Contract):
     evidence_refs: list[str] = Field(default_factory=list, max_length=48)
     insufficient_context: bool = False
 
+    @field_validator('answer')
+    @classmethod
+    def nonblank(cls, value):
+        if not value.strip():
+            raise ValueError('answer must not be blank')
+        return value.strip()
+
+
+class ChatSource(Contract):
+    evidence_id: str
+    title: str
+    url: str | None
+    publisher: str | None
+    published_at: datetime | None
+    page_number: int | None
+    quote: str
+
 
 class ChatResponse(ChatAnswer):
     job_id: UUID
-    sources: list[dict] = Field(default_factory=list)
-    mode: str = 'saved_analysis'
+    sources: list[ChatSource] = Field(default_factory=list)
+    mode: Literal['saved_analysis'] = 'saved_analysis'
+
+
+def _session_result(result: AnalysisResult, job_id: UUID, company_row_id: int,
+                    role: str, goal: str | None) -> AnalysisResult:
+    """Job columns own identity/role/goal; result owns the historical facts."""
+    if result.job_id != job_id or result.company_row_id != company_row_id:
+        raise SessionNotReady('saved result does not match session company')
+    if result.profile_snapshot and result.profile_snapshot.company_id != result.company_id:
+        raise SessionNotReady('saved profile does not match session company')
+    if result.research_context and result.research_context.company_id != result.company_id:
+        raise SessionNotReady('saved research does not match session company')
+    data = result.model_dump(mode='json')
+    data.update(role=role, goal=goal)
+    return AnalysisResult.model_validate(data)
 
 
 class BackendChatRepository:
@@ -78,7 +120,7 @@ class BackendChatRepository:
             raise SessionStoreUnavailable('invalid ML_BACKEND_URL')
 
     def get_result(self, job_id: UUID) -> AnalysisResult:
-        client = self.client or httpx.Client(timeout=10, follow_redirects=False)
+        client = self.client or httpx.Client(timeout=10, follow_redirects=False, trust_env=False)
         try:
             headers = {'Authorization': f'Bearer {self.token}'} if self.token else {}
             with client.stream('GET', f'{self.base_url}/api/v1/analysis/jobs/{job_id}',
@@ -96,9 +138,7 @@ class BackendChatRepository:
             if UUID(job['job_id']) != job_id or job.get('status') != 'completed' or not job.get('result'):
                 raise SessionNotReady('analysis is not completed or has no matching result')
             result = AnalysisResult.model_validate(job['result'])
-            if result.job_id != job_id:
-                raise SessionNotReady('saved result does not match session')
-            return result
+            return _session_result(result, job_id, job['company_id'], job['role'], job.get('goal'))
         except httpx.HTTPError as exc:
             raise SessionStoreUnavailable('backend result endpoint unreachable') from exc
         except (ValueError, KeyError, TypeError) as exc:
@@ -119,7 +159,8 @@ class SupabaseChatRepository:
         try:
             with self.engine.connect() as conn:
                 meta = conn.execute(text("""SELECT status, octet_length(result::text),
-                    length(result::text), md5(result::text) FROM public.analysis_jobs
+                    length(result::text), md5(result::text), company_id, role, goal,
+                    updated_at FROM public.analysis_jobs
                     WHERE id=CAST(:id AS uuid)"""), params).first()
             if meta is None:
                 raise SessionNotFound('analysis session not found')
@@ -133,15 +174,14 @@ class SupabaseChatRepository:
                 with self.engine.connect() as conn:
                     row = conn.execute(text("""SELECT substring(result::text FROM :offset FOR 1000)
                         FROM public.analysis_jobs WHERE id=CAST(:id AS uuid)
-                        AND status='completed' AND md5(result::text)=:version"""),
-                        {**params, 'offset': offset, 'version': meta[3]}).first()
+                        AND status='completed' AND md5(result::text)=:version
+                        AND updated_at=:updated_at"""),
+                        {**params, 'offset': offset, 'version': meta[3], 'updated_at': meta[7]}).first()
                 if row is None:
                     raise SessionNotReady('analysis changed during reading; retry')
                 parts.append(row[0])
             result = AnalysisResult.model_validate_json(''.join(parts))
-            if result.job_id != job_id:
-                raise SessionNotReady('saved result does not match session')
-            return result
+            return _session_result(result, job_id, meta[4], meta[5], meta[6])
         except SQLAlchemyError as exc:
             # Log/return no DSN, SQL parameters or credentials.
             raise SessionStoreUnavailable('analysis_jobs read unavailable; check SELECT permission and RLS') from exc
@@ -160,11 +200,16 @@ class AnalysisChat:
             raise SessionNotReady('saved result does not match session')
         if result.outcome == 'failed':
             raise SessionNotReady('analysis failed')
+        if not result.insights and not result.evidence and not result.research_context:
+            return ChatResponse(job_id=request.job_id, insufficient_context=True,
+                                answer='В этой сессии нет сохранённых инсайтов и источников. '
+                                       'Пояснить результат по имеющимся данным невозможно.')
         evidence = {e.evidence_id: e for e in result.evidence}
         if result.research_context:
             evidence.update((e.evidence_id, e) for e in result.research_context.evidence)
         context = {
             'job_id': str(result.job_id), 'company_id': result.company_id,
+            'company_row_id': result.company_row_id,
             'role': result.role, 'goal': result.goal, 'as_of': result.as_of.isoformat(),
             'analysis_mode': result.mode, 'outcome': result.outcome,
             'insights': [i.model_dump(mode='json') for i in result.insights],
@@ -174,7 +219,7 @@ class AnalysisChat:
         }
         # Never silently truncate the evidence of an answer.
         content = json.dumps({'saved_analysis': context,
-                              'history': [t.model_dump() for t in request.history],
+                              'history': [t.model_dump(mode='json') for t in request.history],
                               'question': request.message}, ensure_ascii=False)
         if len(content) > 65000:
             raise ChatContextTooLarge('session context and history exceed chat input limit')
@@ -201,8 +246,8 @@ def answer_analysis_question(job_id: UUID | str, message: str, *,
                              history: list[dict] | None = None) -> ChatResponse:
     """Explain one saved session. Does not search, persist messages or update jobs."""
     request = ChatRequest(job_id=job_id, message=message, history=history or [])
-    load_dotenv(ROOT / '.env', override=False)
-    source = os.getenv('ML_CHAT_RESULT_SOURCE', 'backend')
+    load_runtime_environment()
+    source = os.getenv('ML_CHAT_RESULT_SOURCE', 'supabase')
     engine = None
     model = None
     try:

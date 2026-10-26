@@ -20,7 +20,7 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from xml.etree import ElementTree
 
 import httpx
-from dotenv import load_dotenv
+from .runtime_environment import load_runtime_environment
 from pydantic import BaseModel, Field
 
 from .contracts import EvidenceRecord, SearchTask
@@ -120,7 +120,7 @@ def parse_rss_candidates(xml: bytes) -> list[Candidate]:
 class TavilySearchProvider:
     def __init__(self, key: str | None = None, client: httpx.Client | None = None):
         if key is None:
-            load_dotenv(ROOT / ".env", override=False)
+            load_runtime_environment()
             key = os.getenv("TAVILY_API")
         self.key = key
         self.client = client or httpx.Client(timeout=TIMEOUT, trust_env=False)

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
-from dotenv import load_dotenv
+from .runtime_environment import load_runtime_environment
 from openai import APIConnectionError, APITimeoutError, OpenAI, RateLimitError, APIStatusError
 from pydantic import BaseModel, ValidationError
 
@@ -48,8 +48,7 @@ class ModelSettings:
 
     @classmethod
     def from_environment(cls, model: str | None = None) -> "ModelSettings":
-        load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
-        load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
+        load_runtime_environment()
         key = os.getenv("MODEL_API_KEY")
         if not key:
             raise ModelConfigurationError("MODEL_API_KEY is missing")

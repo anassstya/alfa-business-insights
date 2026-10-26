@@ -1,0 +1,10 @@
+# Overlay for the existing root Compose. Run both files from the repository root.
+# The backend/frontend definitions remain in the existing docker-compose.yml.
+services:
+  ml:
+    extends:
+      file: ml/docker-compose.yml
+      service: ml
+
+volumes:
+  ml_cache:

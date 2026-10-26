@@ -44,6 +44,9 @@ class SavedWebResearch(BaseModel):
 
 
 class ResearchContextRepository:
+    def replace_alfa_analytics(self, company_id, context, scope):
+        raise NotImplementedError
+
     def get_web_research(self, company_id: str) -> SavedWebResearch | None:
         raise NotImplementedError
 
@@ -75,11 +78,17 @@ class JsonResearchContextRepository(ResearchContextRepository):
         return SavedWebResearch.model_validate(block) if block else None
 
     def replace_web_research(self, company_id, context, scope):
+        return self._replace(company_id, context, scope, 'web_research')
+
+    def replace_alfa_analytics(self, company_id, context, scope):
+        return self._replace(company_id, context, scope, 'alfa_analytics')
+
+    def _replace(self, company_id, context, scope, destination):
         block = _block(company_id, context, scope)
         payload = self._read()
         if payload.get("company_id") != company_id or "base_information" not in payload:
             raise ResearchContextStoreError("prepared company context missing")
-        payload["web_research"] = block.model_dump(mode="json")
+        payload[destination] = block.model_dump(mode="json")
         temporary = self.path.with_suffix(self.path.suffix + ".tmp")
         temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary.replace(self.path)
@@ -118,6 +127,12 @@ class SupabaseResearchContextRepository(ResearchContextRepository):
             raise ResearchContextStoreError("web research read failed") from exc
 
     def replace_web_research(self, company_id, context, scope):
+        return self._replace(company_id, context, scope, 'web_research')
+
+    def replace_alfa_analytics(self, company_id, context, scope):
+        return self._replace(company_id, context, scope, 'alfa_analytics')
+
+    def _replace(self, company_id, context, scope, destination):
         block = _block(company_id, context, scope)
         if not self.can_update_web_research():
             raise ResearchContextPermissionError("UPDATE company_contexts permission denied")
@@ -125,7 +140,7 @@ class SupabaseResearchContextRepository(ResearchContextRepository):
             update_jsonb(self.engine, table="company_contexts", column="payload",
                          where="company_id=:id AND payload ? 'base_information'",
                          params={"id": company_id}, document=block.model_dump_json(),
-                         destination="web_research")
+                         destination=destination)
             return block
         except JsonbWriteConflict as exc:
             raise ResearchContextStoreError("prepared company context missing or upload superseded") from exc

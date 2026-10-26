@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 import httpx
-from dotenv import load_dotenv
+from .runtime_environment import load_runtime_environment
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from .contracts import AnalysisRequest, AnalysisResult, StageEvent
@@ -58,7 +58,7 @@ class CallbackSettings:
     @classmethod
     def from_environment(cls, environ=None):
         if environ is None:
-            load_dotenv(ROOT / ".env", override=False)
+            load_runtime_environment()
             environ = os.environ
         return cls(
             enabled=environ.get("ML_CALLBACK_ENABLED", "false").lower() in ("1", "true", "yes"),

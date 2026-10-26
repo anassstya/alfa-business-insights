@@ -20,8 +20,7 @@
 
 `AnalysisResult.mode` равен `fixture` только для явно включённого
 демонстрационного pipeline; значение `live` оставлено по умолчанию для
-совместимости старых экземпляров модели. Текущий HTTP-сервис не выполняет live
-анализ. Полный fixture ответ: [../fixture_response.json](../fixture_response.json).
+совместимости старых экземпляров модели. HTTP-сервис поддерживает live и явный fixture-режим. Полный fixture ответ: [../fixture_response.json](../fixture_response.json).
 
 Примеры ниже показывают форму отдельных сообщений. Для полной формы и
 ограничений используйте схемы.
@@ -41,3 +40,7 @@
 ```json
 {"schema_version":"1.0","job_id":"b0ec365b-2200-49d8-a02e-32505e16ef6a","run_id":"a2116db1-ae88-4904-91b0-65ab82e6843d","seq":1,"stage":"loading_profile","state":"started","at":"2026-09-15T12:00:00+03:00","summary":"Loading profile","counters":{}}
 ```
+
+Контракты чата `ChatRequest` и `ChatResponse` сгенерированы из
+`ml.src.analysis_chat` той же командой экспорта. Они описывают `job_id`, новый
+вопрос, историю и ответ с источниками. [Инструкция чата](../CHAT_INTEGRATION.md).
