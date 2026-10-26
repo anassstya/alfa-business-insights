@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from .budget import BudgetExceeded, BudgetManager
+from .budget import BudgetExceeded, BudgetManager, analysis_timeout_seconds
 from .bank_research import enrich_with_timeout
 from .api import ModelError
 from .contracts import AnalysisRequest, AnalysisResult, StageEvent, VERSION
@@ -33,7 +33,8 @@ class WebAnalysisPipeline:
                 budget: BudgetManager | None = None) -> AnalysisResult:
         request = AnalysisRequest.model_validate(request)
         # Six web tasks retain their original allowance; bank retrieval gets one extra call.
-        budget = budget or BudgetManager(max_tool_calls=7)
+        budget = budget or BudgetManager(timeout_seconds=analysis_timeout_seconds(),
+                                         max_tool_calls=7)
         run_id = uuid4()
         trace, warnings = [], []
         profile = context = None
