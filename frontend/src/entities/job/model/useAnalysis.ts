@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { analysisJobEvents } from "../api"
+import { analysisKeys } from "./keys"
 import type { AnalysisJob } from "./types"
 
 interface ConnectionState {
@@ -12,18 +14,18 @@ interface ConnectionState {
 const INITIAL_CONNECTION: ConnectionState = { isError: false, isClosed: false };
 
 /**
- * Живое состояние задачи анализа по SSE: последнее пришедшее AnalysisJob.
- * Без jobId не подключается; при смене jobId старое соединение закрывается.
+ * Подписка на SSE /events незавершённой задачи: каждое event: update (AnalysisJob)
+ * кладётся в кэш запроса задачи (analysisKeys.job). Без jobId не подключается;
+ * при смене jobId старое соединение закрывается. Возвращает только состояние соединения.
  */
 const useAnalysis = (jobId?: string) => {
-  const [job, setJob] = useState<AnalysisJob>()
+  const queryClient = useQueryClient()
   const [connection, setConnection] = useState<ConnectionState>(INITIAL_CONNECTION)
 
-  // задача сменилась (новый запуск или другая сессия) — данные прошлой задачи ей не принадлежат
+  // задача сменилась (новый запуск, другая сессия или подписка больше не нужна) — ошибки прошлой ей не принадлежат
   const [currentJobId, setCurrentJobId] = useState(jobId)
   if (jobId !== currentJobId) {
     setCurrentJobId(jobId)
-    setJob(undefined)
     setConnection(INITIAL_CONNECTION)
   }
 
@@ -32,15 +34,14 @@ const useAnalysis = (jobId?: string) => {
 
     return analysisJobEvents(jobId, {
       onUpdate: (next) => {
-        setJob(next)
+        queryClient.setQueryData<AnalysisJob>(analysisKeys.job(jobId), next)
         setConnection(INITIAL_CONNECTION)
       },
       onError: (_event, closed) => setConnection({ isError: true, isClosed: closed }),
     })
-  }, [jobId])
+  }, [jobId, queryClient])
 
   return {
-    job,
     isConnectionError: connection.isError,
     isConnectionClosed: connection.isClosed,
   }
