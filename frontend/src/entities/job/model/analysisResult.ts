@@ -1,56 +1,58 @@
 import { useEffect } from "react";
 import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isFinalStatus } from "../api/job";
 import { useAnalysis } from "./useAnalysis";
-import type { AnalysisFail, AnalysisProgress, AnalysisResult } from "./types";
+import type { AnalysisJob } from "./types";
 
 const analysisKeys = {
   all: ['analysis'] as const,
-  result: (jobId: string) => [...analysisKeys.all, 'result', jobId] as const,
+  /** завершённая задача (completed/failed) — больше не меняется, SSE для неё не нужен */
+  job: (jobId: string) => [...analysisKeys.all, 'job', jobId] as const,
   history: (userId: number) => [...analysisKeys.all, 'history', userId] as const,
   chat: (jobId: string) => [...analysisKeys.all, 'chat', jobId] as const,
 }
 
 /**
- * Кладёт результат завершённого анализа в кэш TanStack Query, чтобы страница деталей
- * открылась сразу, без повторной подписки на SSE.
- */
-const useSyncAnalysisResult = (jobId: string | undefined, result: AnalysisResult | undefined) => {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (jobId && result) {
-      queryClient.setQueryData(analysisKeys.result(jobId), result);
-    }
-  }, [jobId, result, queryClient])
-}
-
-/**
- * Результат анализа по jobId: сначала из кэша (если анализ шёл на этой вкладке),
- * иначе — подписка на SSE задачи: по договорённости сервер сразу после подключения
- * присылает текущий статус, в том числе `completed` с результатом.
- * FIXME(openapi): надёжнее был бы GET /api/v1/analysis/jobs/{jobID} — его нет в спецификации.
+ * Состояние задачи анализа и её результат по jobId.
+ * Завершённую задачу берём из кэша; иначе подписываемся на SSE /events — backend сразу
+ * присылает текущее AnalysisJob, затем обновления. Финальное состояние кладём в кэш,
+ * чтобы при возврате к сессии и на странице деталей не подключаться заново.
  */
 const useAnalysisResult = (jobId: string | undefined) => {
-  const { data: cached } = useQuery<AnalysisResult>({
-    queryKey: analysisKeys.result(jobId ?? ''),
+  const queryClient = useQueryClient();
+
+  const { data: cached } = useQuery<AnalysisJob>({
+    queryKey: analysisKeys.job(jobId ?? ''),
     queryFn: skipToken,
     staleTime: Infinity,
     gcTime: Infinity,
   });
 
-  const live = useAnalysis<unknown, AnalysisProgress, AnalysisResult, AnalysisFail>(cached ? undefined : jobId);
-  useSyncAnalysisResult(jobId, live.completeData);
+  const live = useAnalysis(cached ? undefined : jobId);
 
-  const result = cached ?? live.completeData;
-  const isFailed = live.isFail || (live.isError && live.closed);
+  useEffect(() => {
+    if (jobId && live.job && isFinalStatus(live.job.status)) {
+      queryClient.setQueryData(analysisKeys.job(jobId), live.job);
+    }
+  }, [jobId, live.job, queryClient])
+
+  const job = cached ?? live.job;
+  const status = job?.status;
+  const result = status === 'completed' ? job?.result ?? undefined : undefined;
+  // соединение оборвалось насовсем, а финального состояния так и не пришло
+  const isConnectionLost = live.isConnectionError && live.isConnectionClosed && !isFinalStatus(status);
 
   return {
+    job,
     result,
-    progress: live.progressData,
-    error: live.failData?.error,
-    isLoading: !!jobId && !result && !isFailed,
-    isError: !jobId || (!result && isFailed),
+    status,
+    stage: job?.stage ?? null,
+    error: job?.error_message
+      ?? (isConnectionLost ? 'Не удалось получить состояние анализа' : undefined)
+      ?? (status === 'completed' && !result ? 'Анализ завершён, но результат не сохранён' : undefined),
+    isLoading: !!jobId && !isConnectionLost && !isFinalStatus(status),
+    isError: !!jobId && (isConnectionLost || status === 'failed' || (status === 'completed' && !result)),
   }
 }
 
-export { analysisKeys, useSyncAnalysisResult, useAnalysisResult };
+export { analysisKeys, useAnalysisResult };

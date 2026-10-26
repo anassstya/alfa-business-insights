@@ -1,14 +1,16 @@
-import type { ReactNode } from "react";
-import { Badge } from "@/shared";
-import ArrowIcon from '@/shared/icons/arrow-right.svg?react'
-import type { AnalysisResult, AnalysisSource } from "@/entities/job";
+import { useMemo } from "react";
 import {
-  BodyText, ExternalLink, Item, ItemFooter, ItemList, ItemMeta, ItemText, ItemTitle, LEVEL_LABEL, LevelBadge,
-  Metric, MetricDelta, MetricLabel, MetricsGrid, MetricValue, ReportRoot, Section, SectionCount, SectionHeader,
-  SectionTitle, SENTIMENT, Step, StepBody, StepNumber, SummaryTitle, Tags, TREND_ARROW, TwoColumns,
+  getOutcomeLabel, getSourceKindLabel, type AnalysisResult, type EvidenceRecord, type Insight,
+} from "@/entities/job";
+import {
+  Badges, Block, BlockTitle, BodyText, Chain, Columns, EvidenceItem, EvidenceList, EvidenceTitle, Excerpt,
+  ExternalLink, InsightHeader, InsightTitle, List, Meta, MutedBadge, OutcomeBadge, Rank, ReportRoot, Section,
+  SectionCount, SectionHeader, SectionTitle, SmallText, SourceLinks, SummaryTitle, Warnings,
 } from "./AnalysisReport.styled";
 
 const dateFormatter = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+const pluralRules = new Intl.PluralRules('ru-RU');
+const INSIGHT_WORDS: Record<string, string> = { one: 'вывод', few: 'вывода', many: 'выводов' };
 
 const formatDate = (value?: string | null) => {
   if (!value) return null;
@@ -17,153 +19,150 @@ const formatDate = (value?: string | null) => {
   return Number.isNaN(date.getTime()) ? null : dateFormatter.format(date);
 }
 
-const ReportSection = ({ title, count, children }: { title: string, count?: number, children: ReactNode }) => (
-  <Section>
-    <SectionHeader>
-      <SectionTitle>{title}</SectionTitle>
-      {count !== undefined && <SectionCount>{count}</SectionCount>}
-    </SectionHeader>
-    {children}
-  </Section>
-)
+const EMPTY_TEXT: Partial<Record<AnalysisResult['outcome'], string>> = {
+  no_relevant_evidence: 'За выбранный период не нашлось новостей, которые заметно влияют на компанию.',
+  failed: 'ML не смог сформировать выводы по этой компании.',
+};
 
-const SourceLink = ({ source }: { source: AnalysisSource }) => (
-  <ExternalLink href={source.url} target="_blank" rel="noopener noreferrer">
-    Источник
-    <ArrowIcon width={16} height={16} />
-  </ExternalLink>
-)
+const evidenceMeta = (evidence: EvidenceRecord) =>
+  [evidence.publisher, formatDate(evidence.published_at), getSourceKindLabel(evidence.source_kind)]
+    .filter(Boolean)
+    .join(' · ');
 
-/**
- * Полный отчёт по результату анализа: сводка, метрики, инсайты, риски и возможности,
- * рекомендации и источники. Пустые блоки не показываются.
- */
-const AnalysisReport = ({ result }: { result: AnalysisResult }) => {
-  const metrics = result.metrics ?? [];
-  const insights = result.insights ?? [];
-  const risks = result.risks ?? [];
-  const opportunities = result.opportunities ?? [];
-  const recommendations = result.recommendations ?? [];
-  const sources = result.sources ?? [];
-  const sentiment = result.summary.sentiment ? SENTIMENT[result.summary.sentiment] : null;
+const ListBlock = ({ title, items, tone }: { title: string, items?: string[], tone: 'risk' | 'opportunity' | 'action' }) =>
+  items && items.length > 0 ? (
+    <Block $tone={tone}>
+      <BlockTitle>{title}</BlockTitle>
+      <List>{items.map(item => <li key={item}>{item}</li>)}</List>
+    </Block>
+  ) : null
+
+const InsightCard = ({ insight, evidenceById }: { insight: Insight, evidenceById: Map<string, EvidenceRecord> }) => {
+  const sources = insight.evidence_refs
+    .map(id => evidenceById.get(id))
+    .filter((evidence): evidence is EvidenceRecord => !!evidence);
+  const listBlocks = [insight.risks, insight.opportunities, insight.suggested_actions].filter(items => items?.length).length;
+  const bankView = insight.bank_view?.status === 'available' && insight.bank_view.text ? insight.bank_view : null;
 
   return (
-    <ReportRoot>
-      <Section aria-label="Сводка">
-        {sentiment && <div><LevelBadge $level={sentiment.level}>{sentiment.label}</LevelBadge></div>}
-        <SummaryTitle>{result.summary.title}</SummaryTitle>
-        <BodyText>{result.summary.text}</BodyText>
-      </Section>
+    <Section aria-label={insight.event}>
+      <InsightHeader>
+        <Rank aria-label={`Вывод ${insight.rank}`}>{insight.rank}</Rank>
+        <InsightTitle>{insight.event}</InsightTitle>
+      </InsightHeader>
 
-      {metrics.length > 0 && (
-        <ReportSection title="Ключевые показатели">
-          <MetricsGrid>
-            {metrics.map(metric => (
-              <Metric key={metric.label}>
-                <MetricLabel>{metric.label}</MetricLabel>
-                <MetricValue>{metric.value}</MetricValue>
-                {metric.delta && (
-                  <MetricDelta $trend={metric.trend}>
-                    {metric.trend && `${TREND_ARROW[metric.trend]} `}{metric.delta}
-                  </MetricDelta>
-                )}
-              </Metric>
-            ))}
-          </MetricsGrid>
-        </ReportSection>
+      {insight.ai_interpretation && <BodyText>{insight.ai_interpretation}</BodyText>}
+
+      <Columns>
+        <Block>
+          <BlockTitle>Для компании</BlockTitle>
+          <BodyText>{insight.company_relevance}</BodyText>
+        </Block>
+        <Block>
+          <BlockTitle>Для вашей роли</BlockTitle>
+          <BodyText>{insight.role_relevance}</BodyText>
+        </Block>
+      </Columns>
+
+      {insight.impact_chain.length > 0 && (
+        <div>
+          <BlockTitle style={{ marginBottom: 8 }}>Как это влияет</BlockTitle>
+          <Chain>{insight.impact_chain.map(step => <li key={step}>{step}</li>)}</Chain>
+        </div>
       )}
 
-      {insights.length > 0 && (
-        <ReportSection title="Инсайты" count={insights.length}>
-          <ItemList>
-            {insights.map(insight => (
-              <Item key={insight.id}>
-                <ItemMeta>
-                  <LevelBadge $level={insight.importance}>{LEVEL_LABEL[insight.importance]} приоритет</LevelBadge>
-                  {insight.source?.source && <div>{insight.source.source}</div>}
-                  {formatDate(insight.source?.published_at) && <div>· {formatDate(insight.source?.published_at)}</div>}
-                </ItemMeta>
-                <ItemTitle>{insight.title}</ItemTitle>
-                <ItemText>{insight.text}</ItemText>
-                {((insight.tags?.length ?? 0) > 0 || insight.source) && (
-                  <ItemFooter>
-                    <Tags>{insight.tags?.map(tag => <Badge key={tag}>{tag}</Badge>)}</Tags>
-                    {insight.source && <SourceLink source={insight.source} />}
-                  </ItemFooter>
-                )}
-              </Item>
-            ))}
-          </ItemList>
-        </ReportSection>
+      {listBlocks > 0 && (
+        <Columns $count={listBlocks}>
+          <ListBlock title="Риски" items={insight.risks} tone="risk" />
+          <ListBlock title="Возможности" items={insight.opportunities} tone="opportunity" />
+          <ListBlock title="Что сделать" items={insight.suggested_actions} tone="action" />
+        </Columns>
       )}
 
-      {(risks.length > 0 || opportunities.length > 0) && (
-        <TwoColumns>
-          {risks.length > 0 && (
-            <ReportSection title="Риски" count={risks.length}>
-              <ItemList>
-                {risks.map(risk => (
-                  <Item key={risk.title}>
-                    <ItemMeta><LevelBadge $level={risk.level}>{LEVEL_LABEL[risk.level]} риск</LevelBadge></ItemMeta>
-                    <ItemTitle>{risk.title}</ItemTitle>
-                    <ItemText>{risk.text}</ItemText>
-                  </Item>
-                ))}
-              </ItemList>
-            </ReportSection>
-          )}
-          {opportunities.length > 0 && (
-            <ReportSection title="Возможности" count={opportunities.length}>
-              <ItemList>
-                {opportunities.map(opportunity => (
-                  <Item key={opportunity.title}>
-                    <ItemTitle>{opportunity.title}</ItemTitle>
-                    <ItemText>{opportunity.text}</ItemText>
-                  </Item>
-                ))}
-              </ItemList>
-            </ReportSection>
-          )}
-        </TwoColumns>
+      {bankView && (
+        <Block>
+          <BlockTitle>Позиция банка{formatDate(bankView.report_at) && ` · ${formatDate(bankView.report_at)}`}</BlockTitle>
+          <BodyText>{bankView.text}</BodyText>
+        </Block>
       )}
 
-      {recommendations.length > 0 && (
-        <ReportSection title="Что сделать" count={recommendations.length}>
-          <ItemList as="ol" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-            {recommendations.map((recommendation, index) => (
-              <Item as="li" key={recommendation.title}>
-                <Step>
-                  <StepNumber aria-hidden>{index + 1}</StepNumber>
-                  <StepBody>
-                    <ItemMeta>
-                      <LevelBadge $level={recommendation.priority}>{LEVEL_LABEL[recommendation.priority]} приоритет</LevelBadge>
-                    </ItemMeta>
-                    <ItemTitle>{recommendation.title}</ItemTitle>
-                    <ItemText>{recommendation.text}</ItemText>
-                  </StepBody>
-                </Step>
-              </Item>
-            ))}
-          </ItemList>
-        </ReportSection>
+      {insight.uncertainty && <SmallText><b>Неопределённость:</b> {insight.uncertainty}</SmallText>}
+      {insight.assumptions && insight.assumptions.length > 0 && (
+        <SmallText><b>Допущения:</b> {insight.assumptions.join('; ')}</SmallText>
       )}
 
       {sources.length > 0 && (
-        <ReportSection title="Источники" count={sources.length}>
-          <ItemList>
-            {sources.map(source => (
-              <Item key={source.url}>
-                <ItemMeta>
-                  {source.source && <div>{source.source}</div>}
-                  {formatDate(source.published_at) && <div>· {formatDate(source.published_at)}</div>}
-                </ItemMeta>
-                <ExternalLink href={source.url} target="_blank" rel="noopener noreferrer">
-                  {source.title}
-                </ExternalLink>
-              </Item>
+        <SourceLinks>
+          {sources.map(source => source.url ? (
+            <ExternalLink key={source.evidence_id} href={source.url} target="_blank" rel="noopener noreferrer">
+              {source.publisher ?? source.title} ↗
+            </ExternalLink>
+          ) : (
+            <SmallText key={source.evidence_id}>{source.publisher ?? source.title}</SmallText>
+          ))}
+        </SourceLinks>
+      )}
+    </Section>
+  )
+}
+
+/**
+ * Полный отчёт по AnalysisResult (схема ML v1 из openapi.yaml): исход анализа, выводы
+ * по порядку важности (rank) и источники, на которые они опираются.
+ */
+const AnalysisReport = ({ result }: { result: AnalysisResult }) => {
+  const insights = useMemo(() => [...(result.insights ?? [])].sort((a, b) => a.rank - b.rank), [result.insights]);
+  const evidenceById = useMemo(
+    () => new Map((result.evidence ?? []).map(item => [item.evidence_id, item])),
+    [result.evidence],
+  );
+  const evidence = result.evidence ?? [];
+  const warnings = result.warnings ?? [];
+
+  return (
+    <ReportRoot>
+      <Section aria-label="Итоги анализа">
+        <Badges>
+          <OutcomeBadge $outcome={result.outcome}>{getOutcomeLabel(result.outcome)}</OutcomeBadge>
+          {/* fixture — демонстрационный сценарий, не реальные новости */}
+          {result.mode === 'fixture' && <MutedBadge>Демо-данные</MutedBadge>}
+        </Badges>
+        <SummaryTitle>
+          {insights.length > 0 ? `${insights.length} ${INSIGHT_WORDS[pluralRules.select(insights.length)] ?? 'выводов'} по компании` : 'Выводов нет'}
+        </SummaryTitle>
+        <Meta>
+          {formatDate(result.as_of) && <span>Данные на <b>{formatDate(result.as_of)}</b></span>}
+          {result.goal && <span>Цель: <b>{result.goal}</b></span>}
+          {evidence.length > 0 && <span>Источников: <b>{evidence.length}</b></span>}
+        </Meta>
+        {insights.length === 0 && EMPTY_TEXT[result.outcome] && <BodyText>{EMPTY_TEXT[result.outcome]}</BodyText>}
+        {warnings.length > 0 && <Warnings>{warnings.map(warning => <li key={warning}>{warning}</li>)}</Warnings>}
+      </Section>
+
+      {insights.map(insight => (
+        <InsightCard key={insight.insight_id} insight={insight} evidenceById={evidenceById} />
+      ))}
+
+      {evidence.length > 0 && (
+        <Section aria-label="Источники">
+          <SectionHeader>
+            <SectionTitle>Источники</SectionTitle>
+            <SectionCount>{evidence.length}</SectionCount>
+          </SectionHeader>
+          <EvidenceList>
+            {evidence.map(item => (
+              <EvidenceItem key={item.evidence_id}>
+                <SmallText>{evidenceMeta(item)}</SmallText>
+                {item.url ? (
+                  <ExternalLink href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</ExternalLink>
+                ) : (
+                  <EvidenceTitle>{item.title}</EvidenceTitle>
+                )}
+                {item.excerpt && <Excerpt>{item.excerpt}</Excerpt>}
+              </EvidenceItem>
             ))}
-          </ItemList>
-        </ReportSection>
+          </EvidenceList>
+        </Section>
       )}
     </ReportRoot>
   )

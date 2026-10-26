@@ -12,10 +12,6 @@ const getChatMessages = async (jobId: string, signal?: AbortSignal) => {
   return data.messages;
 }
 
-/**
- * POST /api/v1/analysis/jobs/{jobID}/chat/messages — сообщение пользователя, 201 { message_id }.
- * Пока backend только сохраняет сообщение: ответ ML не генерируется (см. описание в openapi.yaml).
- */
 const sendChatMessage = async (jobId: string, content: string) => {
   const body: SendChatMessageRequest = { content };
   const { data } = await apiClient.post<SendChatMessageResponse>(`${chatUrl(jobId)}/messages`, body);

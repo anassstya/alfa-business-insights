@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import { isPendingChatMessage, useChatMessages, useSendChatMessage } from "@/entities/job";
-import { Chip, SubmitField, VisuallyHidden } from "@/shared";
+import { ChatBubble, ChatMessageItem, useChatMessages, useSendChatMessage } from "@/entities/job";
+import { Chip, SubmitField } from "@/shared";
 import {
-  Bubble, ChatHeader, ChatRoot, ChatSubtitle, ChatTitle, Composer, Empty, EmptyText, Messages, RetryButton,
+  ChatHeader, ChatRoot, ChatSubtitle, ChatTitle, Composer, Empty, EmptyText, Messages, RetryButton,
   Suggestions, Typing,
 } from "./AnalysisChat.styled";
 
@@ -14,7 +14,7 @@ const SUGGESTIONS = [
 
 interface AnalysisChatProps {
   jobId: string;
-  /** чат недоступен, пока нет результата анализа */
+  /** чат недоступен, пока анализ не завершён (нет результата) */
   disabled?: boolean;
 }
 
@@ -24,9 +24,11 @@ interface AnalysisChatProps {
  */
 const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
   const listRef = useRef<HTMLDivElement>(null);
-  const chat = useChatMessages(jobId);
+  // до завершения анализа историю не грузим и на chat/events не подписываемся
+  const chatJobId = disabled ? undefined : jobId;
+  const chat = useChatMessages(chatJobId);
   const messages = chat.data ?? [];
-  const send = useSendChatMessage(jobId);
+  const send = useSendChatMessage(chatJobId);
   const blocked = disabled || !chat.isSuccess;
 
   // новые сообщения и индикатор отправки всегда в зоне видимости
@@ -55,13 +57,14 @@ const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
       </ChatHeader>
 
       <Messages ref={listRef} role="log" aria-live="polite">
-        {chat.isPending && <EmptyText>Загружаем сообщения…</EmptyText>}
+        {disabled && <EmptyText>Чат станет доступен после завершения анализа</EmptyText>}
+        {chat.isPending && !disabled && <EmptyText>Загружаем сообщения…</EmptyText>}
 
         {chat.isError && (
-          <Bubble $author="assistant" $error role="alert">
+          <ChatBubble $author="assistant" $error role="alert">
             Не удалось загрузить сообщения.
             <RetryButton type="button" onClick={() => chat.refetch()}>Повторить</RetryButton>
-          </Bubble>
+          </ChatBubble>
         )}
 
         {chat.isSuccess && messages.length === 0 && (
@@ -77,17 +80,7 @@ const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
           </Empty>
         )}
 
-        {messages.map(message => (
-          <Bubble
-            key={message.id}
-            $author={message.role}
-            // ещё не подтверждено backend — чуть бледнее
-            style={isPendingChatMessage(message) ? { opacity: .6 } : undefined}
-          >
-            <VisuallyHidden>{message.role === 'user' ? 'Вы: ' : 'Ассистент: '}</VisuallyHidden>
-            {message.content}
-          </Bubble>
-        ))}
+        {messages.map(message => <ChatMessageItem key={message.id} message={message} />)}
 
         {send.isPending && (
           <Typing aria-label="Отправляем сообщение">
@@ -96,10 +89,10 @@ const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
         )}
 
         {send.isError && (
-          <Bubble $author="assistant" $error role="alert">
+          <ChatBubble $author="assistant" $error role="alert">
             Не удалось отправить сообщение.
             <RetryButton type="button" onClick={retry}>Повторить</RetryButton>
-          </Bubble>
+          </ChatBubble>
         )}
       </Messages>
 

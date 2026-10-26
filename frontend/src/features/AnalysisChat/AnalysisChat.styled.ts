@@ -1,4 +1,4 @@
-import styled, { css, keyframes } from "styled-components";
+import styled, { keyframes } from "styled-components";
 
 const ChatRoot = styled.section`
   display: flex;
@@ -41,27 +41,6 @@ const Messages = styled.div`
   overflow-y: auto;
   padding: 16px 20px;
   overscroll-behavior: contain;
-`
-
-const Bubble = styled.div<{ $author: 'user' | 'assistant', $error?: boolean }>`
-  max-width: 85%;
-  padding: 10px 14px;
-  font-size: 15px;
-  line-height: 21px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-
-  ${({ theme, $author, $error }) => $author === 'user' ? css`
-    align-self: flex-end;
-    border-radius: 16px 16px 4px 16px;
-    background-color: ${theme.colors.primary.text};
-    color: ${theme.colors.secondary.cardBg};
-  ` : css`
-    align-self: flex-start;
-    border-radius: 16px 16px 16px 4px;
-    background-color: ${$error ? theme.colors.primary.background : theme.colors.secondary.sectionBg};
-    color: ${$error ? theme.colors.primary.hover : theme.colors.primary.text};
-  `}
 `
 
 const RetryButton = styled.button`
@@ -131,6 +110,6 @@ const Composer = styled.div`
 `
 
 export {
-  ChatRoot, ChatHeader, ChatTitle, ChatSubtitle, Messages, Bubble, RetryButton, Typing, Empty, EmptyText,
+  ChatRoot, ChatHeader, ChatTitle, ChatSubtitle, Messages, RetryButton, Typing, Empty, EmptyText,
   Suggestions, Composer,
 };

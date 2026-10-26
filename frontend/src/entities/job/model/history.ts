@@ -11,9 +11,9 @@ const useDemoUserAnalysisJobs = (userId?: number) => useQuery({
 })
 
 const JOB_STATUS_LABEL: Record<string, string> = {
-  pending: 'В очереди',
-  queued: 'В очереди',
-  running: 'Выполняется',
+  pending: 'Задача создана',
+  queued: 'Задача создана',
+  running: 'Анализ выполняется',
   processing: 'Выполняется',
   in_progress: 'Выполняется',
   completed: 'Готов',

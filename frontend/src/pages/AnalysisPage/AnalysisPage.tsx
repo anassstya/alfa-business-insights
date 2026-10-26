@@ -1,8 +1,8 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { getCompanyLabel, useCompany, useRoleContext } from "@/entities";
-import { useAnalysisResult } from "@/entities/job";
+import { AnalysisStageLoader, useAnalysisResult } from "@/entities/job";
 import { AnalysisChat } from "@/features";
-import { AnalysisReport, InsightsSkeleton } from "@/widgets";
+import { AnalysisReport } from "@/widgets";
 import { Button, Card, Text, Title } from "@/shared";
 import ArrowIcon from '@/shared/icons/arrow-right.svg?react'
 import { BackLink, ChatAside, Hero, Layout, MainColumn, MetaLine, PageRoot } from "./AnalysisPage.styled";
@@ -15,23 +15,17 @@ const AnalysisPage = () => {
   const navigate = useNavigate();
   const roles = useRoleContext();
 
-  const { result, isLoading, isError, progress, error } = useAnalysisResult(jobId);
-  const { data: company } = useCompany(result?.company_id ?? null);
+  const { job, result, status, stage, isLoading, isError, error } = useAnalysisResult(jobId);
+  // числовой id компании — в задаче; в result.company_id лежит синтетический код U_…
+  const { data: company } = useCompany(job?.company_id ?? null);
 
-  const roleName = roles.find(role => role.code === result?.role)?.full_name ?? result?.role;
-  const createdAt = result?.created_at ? dateFormatter.format(new Date(result.created_at)) : null;
+  const roleName = roles.find(role => role.code === job?.role)?.full_name ?? job?.role;
+  const createdAt = job?.created_at ? dateFormatter.format(new Date(job.created_at)) : null;
 
   const renderReport = () => {
     if (result) return <AnalysisReport result={result} />;
 
-    if (isLoading) {
-      return (
-        <>
-          {progress?.message && <Text.P2>{progress.message}{progress.progress !== undefined && ` · ${progress.progress}%`}</Text.P2>}
-          <InsightsSkeleton />
-        </>
-      );
-    }
+    if (isLoading) return <AnalysisStageLoader status={status} stage={stage} />;
 
     if (isError) {
       return (
@@ -62,11 +56,11 @@ const AnalysisPage = () => {
 
           <Hero>
             <Title.H2>Аналитика по компании</Title.H2>
-            {result && (
+            {job && (
               <MetaLine>
-                <span>Компания: <b>{company ? getCompanyLabel(company) : `#${result.company_id}`}</b></span>
+                <span>Компания: <b>{company ? getCompanyLabel(company) : `#${job.company_id}`}</b></span>
                 {roleName && <span>Роль: <b>{roleName}</b></span>}
-                {result.goal && <span>Цель: <b>{result.goal}</b></span>}
+                {job.goal && <span>Цель: <b>{job.goal}</b></span>}
                 {createdAt && <span>{createdAt}</span>}
               </MetaLine>
             )}

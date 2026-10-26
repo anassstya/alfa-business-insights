@@ -77,7 +77,7 @@ const Content = () => {
         />
       )}
 
-      {!start.isError && activeJobId && (
+      {!start.isError && activeJobId && start.status && (
         <Chat
           key={activeJobId ?? 'no-session'}
           jobId={activeJobId}

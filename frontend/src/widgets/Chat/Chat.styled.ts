@@ -8,13 +8,6 @@ const ChatRoot = styled.section`
   min-width: 0;
 `
 
-const ProgressText = styled.div`
-  padding: 0 4px;
-  font-size: 14px;
-  line-height: 20px;
-  color: ${({ theme }) => theme.colors.secondary.textSecondary};
-`
-
 const StateCard = styled(Card)`
   display: flex;
   flex-direction: column;
@@ -91,6 +84,6 @@ const Footer = styled.div`
 `
 
 export {
-  ChatRoot, ProgressText, StateCard, StateIcon, StateText, Panel, PanelHeader, PanelTitle, Messages, Hint,
+  ChatRoot, StateCard, StateIcon, StateText, Panel, PanelHeader, PanelTitle, Messages, Hint,
   ErrorText, Footer,
 };

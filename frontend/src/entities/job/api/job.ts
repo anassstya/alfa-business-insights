@@ -1,79 +1,55 @@
+import type { AnalysisJob, AnalysisStatus } from "../model/types";
+
 /**
- * Имена SSE-событий задачи анализа.
- * FIXME(openapi): эндпоинта GET /api/v1/analysis/jobs/{jobID}/events пока нет в спецификации —
- * имена и формат `data` (JSON) предварительные, их нужно согласовать с backend.
- * Событие `error` серверу использовать нельзя: оно совпадает со встроенной ошибкой соединения EventSource.
+ * События SSE GET /api/v1/analysis/jobs/{jobID}/events (см. openapi.yaml):
+ * `update` с JSON AnalysisJob — сразу после подключения и при каждом изменении записи
+ * (backend проверяет PostgreSQL примерно раз в 2 секунды); между ними — комментарии `: ping`.
  */
 const JOB_EVENTS = {
-  /** текущий статус задачи — сервер присылает его сразу после подключения */
-  connected: 'connected',
-  /** промежуточный прогресс от ML */
-  progress: 'progress',
-  /** задача завершена, в data — результат; поток закрывается */
-  completed: 'completed',
-  /** задача упала, в data — описание ошибки; поток закрывается */
-  failed: 'failed',
-  error: 'error'
+  update: 'update',
 } as const;
 
-interface Params<TConnect, TProgress, TResult, TFail> {
-  onConnect?(data: TConnect, event: MessageEvent<string>): void;
-  onProgress?(data: TProgress, event: MessageEvent<string>): void;
-  onComplete?(data: TResult, event: MessageEvent<string>): void;
-  onFail?(data: TFail, event: MessageEvent<string>): void;
+/** Финальные статусы: после них задача больше не меняется */
+const isFinalStatus = (status: AnalysisStatus | undefined) => status === 'completed' || status === 'failed';
+
+interface Params {
+  /** новое состояние задачи, в том числе первое — сразу после подключения */
+  onUpdate(job: AnalysisJob, event: MessageEvent<string>): void;
+  /**
+   * Ошибка соединения. При `closed: false` браузер сам переподключится,
+   * при `closed: true` — сдался (например, 404 или 500 на подключении).
+   */
   onError?(event: Event, closed: boolean): void;
 }
 
-/** data в SSE — всегда строка; сервер шлёт JSON, но не падаем, если пришёл обычный текст */
-const parseData = <T>(event: MessageEvent<string>): T => {
-  try {
-    return JSON.parse(event.data) as T;
-  } catch {
-    return event.data as unknown as T;
-  }
-}
-
 /**
- * Подписка на прогресс задачи анализа: GET /api/v1/analysis/jobs/{jobID}/events (SSE).
- * Возвращает функцию отписки — её нужно вызвать при размонтировании (например, из useEffect).
- * После `completed` или `failed` соединение закрывается само, иначе EventSource
- * переподключался бы каждый раз, когда сервер завершает поток.
+ * Подписка на состояние задачи анализа по SSE. Возвращает функцию отписки —
+ * её нужно вызвать при размонтировании или смене задачи (например, из useEffect).
+ * Backend не закрывает поток после completed/failed, поэтому закрываем его сами:
+ * иначе соединение и ping-и висели бы до ухода со страницы.
  */
-const analysisJobEvents = <TConnect = unknown, TProgress = unknown, TResult = unknown, TFail = unknown>(
-  job: string,
-  { onConnect, onProgress, onComplete, onFail, onError }: Params<TConnect, TProgress, TResult, TFail>,
-) => {
-  if (!job) {
-    return () => {};
-  }
+const analysisJobEvents = (jobId: string, { onUpdate, onError }: Params) => {
+  const url = `${import.meta.env.VITE_API_URL ?? ''}/api/v1/analysis/jobs/${encodeURIComponent(jobId)}/events`;
+  const source = new EventSource(url);
 
-  const url = `${import.meta.env.VITE_API_URL ?? ''}/api/v1/analysis/jobs/${encodeURIComponent(job)}/events`
+  source.addEventListener(JOB_EVENTS.update, (event) => {
+    let job: AnalysisJob;
+    try {
+      job = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (!job || typeof job.status !== 'string') return;
 
-  const source = new EventSource(url)
-
-  source.addEventListener(JOB_EVENTS.connected, (event) => {
-    onConnect?.(parseData<TConnect>(event), event);
+    if (isFinalStatus(job.status)) source.close();
+    onUpdate(job, event);
   });
 
-  source.addEventListener(JOB_EVENTS.progress, (event) => {
-    onProgress?.(parseData<TProgress>(event), event);
-  });
-
-  source.addEventListener(JOB_EVENTS.completed, (event) => {
-    source.close();
-    onComplete?.(parseData<TResult>(event), event);
-  });
-
-  source.addEventListener(JOB_EVENTS.failed, (event) => {
-    source.close();
-    onFail?.(parseData<TFail>(event), event);
-  });
-
-  source.addEventListener(JOB_EVENTS.error, (event) => {
+  source.addEventListener('error', (event) => {
     onError?.(event, source.readyState === EventSource.CLOSED);
   });
 
   return () => source.close();
 }
 
-export { analysisJobEvents, JOB_EVENTS }
+export { analysisJobEvents, isFinalStatus, JOB_EVENTS };

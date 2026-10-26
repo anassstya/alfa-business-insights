@@ -1,106 +1,139 @@
-/**
- * FIXME(openapi): формат результата анализа (data события `completed` в SSE) не описан ни в спецификации,
- * ни в ML. Тип предварительный — все списки на фронте читаются через `?? []`, чтобы отсутствующие
- * блоки не роняли страницу. Согласовать с backend/ML и заменить.
- */
+/* Типы по backend/api/openapi.yaml (components/schemas) */
 
-type Level = 'high' | 'medium' | 'low';
-type Sentiment = 'positive' | 'neutral' | 'negative';
-type Trend = 'up' | 'down' | 'flat';
+/** AnalysisStatus — состояние задания в Go и PostgreSQL */
+type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed';
 
-interface AnalysisMetric {
-  label: string;
-  /** уже отформатированное значение: «1,3 млрд ₽», «+12%» */
-  value: string;
-  /** изменение за период: «+4,2% за квартал» */
-  delta?: string | null;
-  trend?: Trend | null;
+/** AnalysisStage — текущий этап ML pipeline */
+type AnalysisStage =
+  | 'loading_profile'
+  | 'mapping_exposures'
+  | 'planning'
+  | 'retrieving'
+  | 'analyzing'
+  | 'validating'
+  | 'completed';
+
+/** AnalysisOutcome — содержательный исход анализа (не то же, что статус задания) */
+type AnalysisOutcome = 'ok' | 'partial' | 'no_relevant_evidence' | 'failed';
+
+/** BankView — позиция банка по событию; до подключения банковских PDF ожидается unavailable */
+interface BankView {
+  status?: 'available' | 'unavailable';
+  text?: string | null;
+  /** ISO 8601 */
+  report_at?: string | null;
+  evidence_refs?: string[];
 }
 
-interface AnalysisSource {
+/** Insight — один вывод анализа */
+interface Insight {
+  insight_id: string;
+  /** что произошло */
+  event: string;
+  ai_interpretation?: string;
+  /** почему это важно компании */
+  company_relevance: string;
+  /** почему это важно для выбранной роли */
+  role_relevance: string;
+  /** цепочка влияния события на компанию, по шагам */
+  impact_chain: string[];
+  bank_view?: BankView;
+  risks?: string[];
+  opportunities?: string[];
+  suggested_actions?: string[];
+  assumptions?: string[];
+  uncertainty: string;
+  /** evidence_id из AnalysisResult.evidence */
+  evidence_refs: string[];
+  evidence_sources?: Record<string, unknown>[];
+  feature_refs: string[];
+  /** порядок важности, начиная с 1 */
+  rank: number;
+}
+
+type EvidenceSourceKind = 'news' | 'official_release' | 'bank_research' | 'fixture';
+
+/** EvidenceRecord — источник (новость, релиз, исследование), на который опираются выводы */
+interface EvidenceRecord {
+  evidence_id: string;
+  document_id: string;
+  source_kind: EvidenceSourceKind;
   title: string;
-  url: string;
-  /** издание: «РБК», «Интерфакс» */
-  source?: string | null;
+  publisher?: string | null;
+  url?: string | null;
   /** ISO 8601 */
   published_at?: string | null;
-}
-
-interface AnalysisInsight {
-  id: string;
-  title: string;
-  text: string;
-  importance: Level;
-  tags?: string[];
-  source?: AnalysisSource | null;
-}
-
-interface AnalysisRisk {
-  title: string;
-  text: string;
-  level: Level;
-}
-
-interface AnalysisOpportunity {
-  title: string;
-  text: string;
-}
-
-interface AnalysisRecommendation {
-  title: string;
-  text: string;
-  priority: Level;
-}
-
-interface AnalysisResult {
-  job_id: string;
-  company_id: number;
-  role: string;
-  goal?: string | null;
   /** ISO 8601 */
-  created_at?: string | null;
-  summary: {
-    title: string;
-    text: string;
-    sentiment?: Sentiment | null;
-  };
-  metrics?: AnalysisMetric[];
-  insights?: AnalysisInsight[];
-  risks?: AnalysisRisk[];
-  opportunities?: AnalysisOpportunity[];
-  recommendations?: AnalysisRecommendation[];
-  sources?: AnalysisSource[];
+  retrieved_at: string;
+  excerpt: string;
+  date_status: 'known' | 'unknown' | 'archived';
+  content_status: 'full_text' | 'excerpt_only' | 'fetch_failed' | 'paywall';
 }
 
-/** data события `progress` (предварительно) */
-interface AnalysisProgress {
-  stage?: string;
-  /** 0..100 */
-  progress?: number;
-  message?: string;
-}
-
-/** data события `failed` (предварительно) */
-interface AnalysisFail {
-  error?: string;
+/** StageEvent — запись трассировки этапов ML */
+interface StageEvent {
+  job_id: string;
+  run_id: string;
+  seq: number;
+  stage: AnalysisStage;
+  state: 'started' | 'completed' | 'failed' | 'skipped';
+  /** ISO 8601 */
+  at: string;
+  summary: string;
+  counters?: Record<string, number>;
 }
 
 /**
- * Статус задачи анализа. FIXME(openapi): в спецификации это просто string —
- * backend создаёт задачу со статусом `pending`, дальше статусы выставляет ML.
+ * AnalysisResult — полный JSON результата ML v1 (AnalysisJob.result).
+ * Внимание: company_id здесь — синтетический код `U_…`, числовой id компании — company_row_id.
+ * mode=fixture — демонстрационный сценарий, не реальные новости.
  */
-type AnalysisJobStatus = string;
-
-/** Элемент `jobs[]` в GET /api/v1/demo/users/{id}/analysis/jobs (AnalysisJobSummary) */
-interface AnalysisJobSummary {
+interface AnalysisResult {
+  schema_version?: '1.0';
   job_id: string;
-  company_id: number;
+  run_id: string;
+  company_id: string;
+  company_row_id: number;
   role: string;
   goal?: string | null;
-  status: AnalysisJobStatus;
-  stage?: string | null;
+  /** на какую дату собран анализ, ISO 8601 */
+  as_of: string;
+  mode?: 'fixture' | 'live';
+  outcome: AnalysisOutcome;
+  /** не больше 5 */
+  insights?: Insight[];
+  evidence?: EvidenceRecord[];
+  profile_snapshot?: Record<string, unknown> | null;
+  research_context?: Record<string, unknown> | null;
+  warnings?: string[];
+  trace?: StageEvent[];
+  usage?: Record<string, unknown>;
+  versions?: Record<string, string>;
+}
+
+/** AnalysisJobSummary — элемент `jobs[]` в GET /api/v1/demo/users/{id}/analysis/jobs */
+interface AnalysisJobSummary {
+  job_id: string;
+  /** числовой companies.id, не synthetic_u */
+  company_id: number;
+  role: string;
+  goal: string | null;
+  status: AnalysisStatus;
+  stage: AnalysisStage | null;
   /** ISO 8601 */
   created_at: string;
+}
+
+/**
+ * AnalysisJob — состояние задания и полный результат: ответ GET /api/v1/analysis/jobs/{jobID}
+ * и data события `update` в SSE /events. result равен null до финального callback ML.
+ */
+interface AnalysisJob extends AnalysisJobSummary {
+  demo_user_id: number | null;
+  result: AnalysisResult | null;
+  error_message: string | null;
+  /** ISO 8601 */
+  updated_at: string;
 }
 
 /** Ответ GET /api/v1/demo/users/{id}/analysis/jobs — задачи от новых к старым */
@@ -110,7 +143,7 @@ interface AnalysisJobsResponse {
 
 type ChatAuthor = 'user' | 'assistant';
 
-/** ChatMessage из openapi.yaml — сообщение чата аналитической сессии */
+/** ChatMessage — сообщение чата аналитической сессии */
 interface ChatMessage {
   id: string;
   role: ChatAuthor;
@@ -136,8 +169,7 @@ interface SendChatMessageResponse {
 }
 
 export type {
-  Level, Sentiment, Trend, AnalysisMetric, AnalysisSource, AnalysisInsight, AnalysisRisk,
-  AnalysisOpportunity, AnalysisRecommendation, AnalysisResult, AnalysisProgress, AnalysisFail,
-  AnalysisJobStatus, AnalysisJobSummary, AnalysisJobsResponse,
+  AnalysisStatus, AnalysisStage, AnalysisOutcome, BankView, Insight, EvidenceSourceKind, EvidenceRecord, StageEvent,
+  AnalysisResult, AnalysisJobSummary, AnalysisJob, AnalysisJobsResponse,
   ChatAuthor, ChatMessage, ChatMessagesResponse, SendChatMessageRequest, SendChatMessageResponse,
 };

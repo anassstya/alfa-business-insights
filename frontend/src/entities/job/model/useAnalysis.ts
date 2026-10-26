@@ -1,91 +1,48 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { analysisJobEvents, JOB_EVENTS } from "../api"
+import { useEffect, useState } from "react"
+import { analysisJobEvents } from "../api"
+import type { AnalysisJob } from "./types"
 
-const useAnalysis = <TConnect, TProgress, TComplete, TFail>(job?: string) => {
-  const [connectData, setConnectData] = useState<TConnect>()
-  const [progressData, setProgressData] = useState<TProgress>()
-  const [completeData, setCompleteData] = useState<TComplete>()
-  const [failData, setFailData] = useState<TFail>()
-  const [closed, setClosed] = useState(false)
-  const [isConnect, setIsConnect] = useState(false)
-  const [isProgress, setIsProgress] = useState(false)
-  const [isComplete, setIsComplete] = useState(false)
-  const [isFail, setIsFail] = useState(false)
-  const [isError, setIsError] = useState(false)
+interface ConnectionState {
+  /** была ошибка соединения */
+  isError: boolean;
+  /** браузер больше не переподключается */
+  isClosed: boolean;
+}
+
+const INITIAL_CONNECTION: ConnectionState = { isError: false, isClosed: false };
+
+/**
+ * Живое состояние задачи анализа по SSE: последнее пришедшее AnalysisJob.
+ * Без jobId не подключается; при смене jobId старое соединение закрывается.
+ */
+const useAnalysis = (jobId?: string) => {
+  const [job, setJob] = useState<AnalysisJob>()
+  const [connection, setConnection] = useState<ConnectionState>(INITIAL_CONNECTION)
 
   // задача сменилась (новый запуск или другая сессия) — данные прошлой задачи ей не принадлежат
-  const [currentJob, setCurrentJob] = useState(job)
-  if (job !== currentJob) {
-    setCurrentJob(job)
-    setConnectData(undefined)
-    setProgressData(undefined)
-    setCompleteData(undefined)
-    setFailData(undefined)
-    setClosed(false)
-    setIsConnect(false)
-    setIsProgress(false)
-    setIsComplete(false)
-    setIsFail(false)
-    setIsError(false)
+  const [currentJobId, setCurrentJobId] = useState(jobId)
+  if (jobId !== currentJobId) {
+    setCurrentJobId(jobId)
+    setJob(undefined)
+    setConnection(INITIAL_CONNECTION)
   }
 
-  const onConnect = useCallback((data: TConnect) => {
-    setConnectData(data)
-    setIsConnect(!!data)
-  }, [])
-  const onProgress = useCallback((data: TProgress) => {
-    setProgressData(data)
-    setIsProgress(!!data)
-    setIsConnect(false)
-  }, [])
-  const onComplete = useCallback((data: TComplete) => {
-    setCompleteData(data)
-    setIsComplete(!!data)
-    setIsProgress(false)
-    setIsConnect(false)
-  }, [])
-  const onFail = useCallback((data: TFail) => {
-    setFailData(data)
-    setIsFail(!!data)
-    setIsComplete(false)
-    setIsProgress(false)
-    setIsConnect(false)
-  }, [])
-  const onError = useCallback((_event: Event, closed: boolean) => {
-    setClosed(closed);
-    setIsError(true)
-    setIsFail(false)
-    setIsComplete(false)
-    setIsProgress(false)
-    setIsConnect(false)
-  }, [])
-
   useEffect(() => {
-    const close = job ? analysisJobEvents(job, { onConnect, onProgress, onComplete, onFail, onError }) : () => {}
+    if (!jobId) return;
 
-    return close
-  }, [job, onComplete, onConnect, onError, onFail, onProgress])
-
-  const status = useMemo(() => {
-    if (isConnect) return JOB_EVENTS.connected
-    if (isProgress) return JOB_EVENTS.progress
-    if (isComplete) return JOB_EVENTS.completed
-    if (isFail) return JOB_EVENTS.failed
-    if (isError) return JOB_EVENTS.error
-  }, [isComplete, isConnect, isError, isFail, isProgress])
+    return analysisJobEvents(jobId, {
+      onUpdate: (next) => {
+        setJob(next)
+        setConnection(INITIAL_CONNECTION)
+      },
+      onError: (_event, closed) => setConnection({ isError: true, isClosed: closed }),
+    })
+  }, [jobId])
 
   return {
-    connectData,
-    progressData,
-    completeData,
-    failData,
-    closed,
-    isConnect,
-    isProgress,
-    isComplete,
-    isFail,
-    isError,
-    status
+    job,
+    isConnectionError: connection.isError,
+    isConnectionClosed: connection.isClosed,
   }
 }
 

@@ -1,12 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAnalysisResult, useChatMessages, useSendChatMessage } from "@/entities/job";
+import {
+  AnalysisStageLoader, ChatMessageItem, useAnalysisResult, useChatMessages, useSendChatMessage,
+} from "@/entities/job";
 import { Button, SubmitField, Title } from "@/shared";
 import { AnalysisPreview } from "./AnalysisPreview";
-import { InsightsSkeleton } from "./InsightsSkeleton";
 import {
-  ChatRoot, ErrorText, Footer, Hint, Messages, Panel, PanelHeader, PanelTitle, ProgressText, StateCard, StateIcon,
-  StateText,
+  ChatRoot, ErrorText, Footer, Hint, Messages, Panel, PanelHeader, PanelTitle, StateCard, StateIcon, StateText,
 } from "./Chat.styled";
 
 interface ChatProps {
@@ -20,15 +20,16 @@ interface ChatProps {
 
 /**
  * Чат по сессии анализа. Вся работа с SSE — здесь: подписка на события задачи по jobId,
- * кэширование результата, прогресс, ошибка и превью готового анализа.
- * Внизу — поле для вопросов по результату. Сообщения хранятся в состоянии виджета,
- * их отрисовка (шаблон сообщений) пока не сделана.
+ * кэширование результата, лоадер по этапам, ошибка и превью готового анализа.
+ * Ниже — сообщения сессии (ассистент слева, пользователь справа) и поле для вопросов;
+ * чат открывается только после завершения анализа.
  * Состояние привязано к jobId: при смене сессии виджет нужно пересоздавать (key={jobId}).
  */
 const Chat = ({ jobId, onRunningChange, onRestart }: ChatProps) => {
   const navigate = useNavigate();
-  // результат: из кэша, иначе по SSE (сервер сразу присылает текущий статус задачи)
-  const { result, isLoading, isError, error, progress } = useAnalysisResult(jobId);
+  const listRef = useRef<HTMLDivElement>(null);
+  // состояние задачи: из кэша, иначе по SSE (event: update с AnalysisJob, сразу после подключения)
+  const { result, status, stage, isLoading, isError, error } = useAnalysisResult(jobId);
   const isRunning = !!jobId && isLoading;
 
   useEffect(() => {
@@ -39,16 +40,28 @@ const Chat = ({ jobId, onRunningChange, onRestart }: ChatProps) => {
     return () => onRunningChange?.(false);
   }, [isRunning, onRunningChange])
 
-  // сообщения сессии: история с сервера, затем новые — по chat/events
-  const chat = useChatMessages(jobId);
+  /** Чат доступен только по завершённому анализу (result есть только у completed) */
+  const chatJobId = result ? jobId : undefined;
+  // сообщения сессии: история с сервера, затем новые — по chat/events; до завершения анализа не грузим
+  const chat = useChatMessages(chatJobId);
   const messages = chat.data ?? [];
   // отправка — мутация POST chat/messages
-  const send = useSendChatMessage(jobId);
-  /**
-   * Писать можно, как только загружена история сессии: backend принимает сообщения
-   * независимо от статуса анализа (а SSE анализа пока шлёт события в другом формате — см. итог).
-   */
-  const canAsk = !!jobId && chat.isSuccess;
+  const send = useSendChatMessage(chatJobId);
+  const canAsk = !!chatJobId && chat.isSuccess;
+
+  const getLockedHint = () => {
+    if (!jobId) return 'Запустите анализ или выберите сессию в «Мои отчёты»';
+    if (isError) return 'Чат недоступен: анализ не удался';
+    if (!result) return 'Чат станет доступен после завершения анализа';
+    return null;
+  }
+  const lockedHint = getLockedHint();
+
+  // новые сообщения всегда в зоне видимости
+  useEffect(() => {
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+  }, [messages.length, send.isError])
 
   const ask = (text: string) => {
     const content = text.trim();
@@ -58,18 +71,7 @@ const Chat = ({ jobId, onRunningChange, onRestart }: ChatProps) => {
   }
 
   const renderAnalysisState = () => {
-    if (isRunning) {
-      return (
-        <>
-          {progress?.message && (
-            <ProgressText>
-              {progress.message}{progress.progress !== undefined && ` · ${progress.progress}%`}
-            </ProgressText>
-          )}
-          <InsightsSkeleton />
-        </>
-      );
-    }
+    if (isRunning) return <AnalysisStageLoader status={status} stage={stage} />;
 
     if (jobId && isError) {
       return (
@@ -98,18 +100,18 @@ const Chat = ({ jobId, onRunningChange, onRestart }: ChatProps) => {
           <PanelTitle>Вопросы по анализу</PanelTitle>
         </PanelHeader>
 
-        <Messages role="log" aria-live="polite" data-count={messages.length}>
-          {/* TODO: шаблон сообщений — messages (ChatMessage: id, role, content, created_at) пока не отрисовываются */}
-          {!jobId && <Hint>Запустите анализ или выберите сессию в «Мои отчёты»</Hint>}
-          {chat.isPending && jobId && <Hint>Загружаем сообщения…</Hint>}
+        <Messages ref={listRef} role="log" aria-live="polite">
+          {lockedHint && <Hint>{lockedHint}</Hint>}
+          {chat.isPending && chatJobId && <Hint>Загружаем сообщения…</Hint>}
           {chat.isError && <ErrorText role="alert">Не удалось загрузить сообщения сессии</ErrorText>}
           {canAsk && messages.length === 0 && <Hint>Задайте вопрос по результатам анализа</Hint>}
+          {messages.map(message => <ChatMessageItem key={message.id} message={message} />)}
           {send.isError && <ErrorText role="alert">Не удалось отправить сообщение. Попробуйте ещё раз.</ErrorText>}
         </Messages>
 
         <Footer>
           <SubmitField
-            placeholder="Спросите про анализ"
+            placeholder={chatJobId ? 'Спросите про анализ' : 'Чат станет доступен после анализа'}
             submitLabel="Отправить сообщение"
             isLoading={send.isPending}
             disabled={!canAsk}
