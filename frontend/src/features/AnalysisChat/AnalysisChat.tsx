@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { sendAnalysisChatMessage, type ChatMessage } from "@/entities/job";
+import { useEffect, useRef } from "react";
+import { isPendingChatMessage, useChatMessages, useSendChatMessage } from "@/entities/job";
 import { Chip, SubmitField, VisuallyHidden } from "@/shared";
 import {
   Bubble, ChatHeader, ChatRoot, ChatSubtitle, ChatTitle, Composer, Empty, EmptyText, Messages, RetryButton,
@@ -19,44 +18,33 @@ interface AnalysisChatProps {
   disabled?: boolean;
 }
 
-/** Чат с ассистентом по результатам анализа; история живёт только в этой вкладке */
+/**
+ * Чат с ассистентом по результатам анализа. История — с сервера (GET chat/messages),
+ * новые сообщения — по chat/events, отправка — мутация POST chat/messages.
+ */
 const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [failedMessage, setFailedMessage] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const chat = useChatMessages(jobId);
+  const messages = chat.data ?? [];
+  const send = useSendChatMessage(jobId);
+  const blocked = disabled || !chat.isSuccess;
 
-  const { mutate, isPending } = useMutation({
-    mutationFn: ({ message, history }: { message: string, history: ChatMessage[] }) =>
-      sendAnalysisChatMessage(jobId, { message, history }),
-    onSuccess: (reply) => {
-      setFailedMessage(null);
-      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
-    },
-    onError: (_error, { message }) => setFailedMessage(message),
-  });
-
-  // новые сообщения и индикатор «печатает» всегда в зоне видимости
+  // новые сообщения и индикатор отправки всегда в зоне видимости
   useEffect(() => {
     const list = listRef.current;
     if (list) list.scrollTop = list.scrollHeight;
-  }, [messages.length, isPending, failedMessage])
+  }, [messages.length, send.isPending, send.isError])
 
   const ask = (text: string) => {
-    const message = text.trim();
-    if (!message || isPending || disabled) return;
+    const content = text.trim();
+    if (!content || send.isPending || blocked) return;
 
-    setFailedMessage(null);
-    setMessages(prev => [...prev, { role: 'user', content: message }]);
-    mutate({ message, history: messages });
+    send.mutate(content);
   }
 
-  /** повтор последнего вопроса: он уже в ленте, в историю для запроса его не дублируем */
+  /** повтор неотправленного сообщения: при ошибке оно убрано из ленты, отправляем заново */
   const retry = () => {
-    if (!failedMessage) return;
-
-    const history = messages.slice(0, -1);
-    setFailedMessage(null);
-    mutate({ message: failedMessage, history });
+    if (send.variables) send.mutate(send.variables);
   }
 
   return (
@@ -67,12 +55,21 @@ const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
       </ChatHeader>
 
       <Messages ref={listRef} role="log" aria-live="polite">
-        {messages.length === 0 && !isPending && (
+        {chat.isPending && <EmptyText>Загружаем сообщения…</EmptyText>}
+
+        {chat.isError && (
+          <Bubble $author="assistant" $error role="alert">
+            Не удалось загрузить сообщения.
+            <RetryButton type="button" onClick={() => chat.refetch()}>Повторить</RetryButton>
+          </Bubble>
+        )}
+
+        {chat.isSuccess && messages.length === 0 && (
           <Empty>
             <EmptyText>Задайте вопрос по отчёту — например:</EmptyText>
             <Suggestions>
               {SUGGESTIONS.map(suggestion => (
-                <Chip key={suggestion} type="button" disabled={disabled} onClick={() => ask(suggestion)}>
+                <Chip key={suggestion} type="button" disabled={blocked} onClick={() => ask(suggestion)}>
                   {suggestion}
                 </Chip>
               ))}
@@ -80,22 +77,27 @@ const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
           </Empty>
         )}
 
-        {messages.map((message, index) => (
-          <Bubble key={index} $author={message.role}>
+        {messages.map(message => (
+          <Bubble
+            key={message.id}
+            $author={message.role}
+            // ещё не подтверждено backend — чуть бледнее
+            style={isPendingChatMessage(message) ? { opacity: .6 } : undefined}
+          >
             <VisuallyHidden>{message.role === 'user' ? 'Вы: ' : 'Ассистент: '}</VisuallyHidden>
             {message.content}
           </Bubble>
         ))}
 
-        {isPending && (
-          <Typing aria-label="Ассистент печатает">
+        {send.isPending && (
+          <Typing aria-label="Отправляем сообщение">
             <i /><i /><i />
           </Typing>
         )}
 
-        {failedMessage && (
+        {send.isError && (
           <Bubble $author="assistant" $error role="alert">
-            Не удалось получить ответ.
+            Не удалось отправить сообщение.
             <RetryButton type="button" onClick={retry}>Повторить</RetryButton>
           </Bubble>
         )}
@@ -105,8 +107,8 @@ const AnalysisChat = ({ jobId, disabled = false }: AnalysisChatProps) => {
         <SubmitField
           placeholder={disabled ? 'Чат станет доступен после анализа' : 'Спросите про аналитику'}
           submitLabel="Отправить сообщение"
-          isLoading={isPending}
-          disabled={disabled}
+          isLoading={send.isPending}
+          disabled={blocked}
           clearOnSubmit
           maxLength={1000}
           onSubmit={ask}

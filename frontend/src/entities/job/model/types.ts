@@ -108,8 +108,36 @@ interface AnalysisJobsResponse {
   jobs: AnalysisJobSummary[];
 }
 
+type ChatAuthor = 'user' | 'assistant';
+
+/** ChatMessage из openapi.yaml — сообщение чата аналитической сессии */
+interface ChatMessage {
+  id: string;
+  role: ChatAuthor;
+  content: string;
+  /** ISO 8601 */
+  created_at: string;
+}
+
+/** Ответ GET /api/v1/analysis/jobs/{jobID}/chat/messages */
+interface ChatMessagesResponse {
+  messages: ChatMessage[];
+}
+
+/** Тело POST /api/v1/analysis/jobs/{jobID}/chat/messages */
+interface SendChatMessageRequest {
+  /** непустое после trim */
+  content: string;
+}
+
+/** Ответ 201 POST /api/v1/analysis/jobs/{jobID}/chat/messages */
+interface SendChatMessageResponse {
+  message_id: string;
+}
+
 export type {
   Level, Sentiment, Trend, AnalysisMetric, AnalysisSource, AnalysisInsight, AnalysisRisk,
   AnalysisOpportunity, AnalysisRecommendation, AnalysisResult, AnalysisProgress, AnalysisFail,
   AnalysisJobStatus, AnalysisJobSummary, AnalysisJobsResponse,
+  ChatAuthor, ChatMessage, ChatMessagesResponse, SendChatMessageRequest, SendChatMessageResponse,
 };

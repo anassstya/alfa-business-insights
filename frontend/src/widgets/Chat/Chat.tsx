@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { sendAnalysisChatMessage, useAnalysisResult, type ChatMessage } from "@/entities/job";
+import { useAnalysisResult, useChatMessages, useSendChatMessage } from "@/entities/job";
 import { Button, SubmitField, Title } from "@/shared";
 import { AnalysisPreview } from "./AnalysisPreview";
 import { InsightsSkeleton } from "./InsightsSkeleton";
@@ -34,22 +33,28 @@ const Chat = ({ jobId, onRunningChange, onRestart }: ChatProps) => {
 
   useEffect(() => {
     onRunningChange?.(isRunning);
+
+    // чат убрали (выбрали «Новый отчёт» или другую сессию) — за этой задачей он больше не следит,
+    // иначе родитель так и считал бы, что анализ идёт, и держал бы форму запуска заблокированной
+    return () => onRunningChange?.(false);
   }, [isRunning, onRunningChange])
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-
-  const send = useMutation({
-    mutationFn: ({ message, history }: { message: string, history: ChatMessage[] }) =>
-      sendAnalysisChatMessage(jobId!, { message, history }),
-    onSuccess: (reply) => setMessages(prev => [...prev, { role: 'assistant', content: reply }]),
-  });
+  // сообщения сессии: история с сервера, затем новые — по chat/events
+  const chat = useChatMessages(jobId);
+  const messages = chat.data ?? [];
+  // отправка — мутация POST chat/messages
+  const send = useSendChatMessage(jobId);
+  /**
+   * Писать можно, как только загружена история сессии: backend принимает сообщения
+   * независимо от статуса анализа (а SSE анализа пока шлёт события в другом формате — см. итог).
+   */
+  const canAsk = !!jobId && chat.isSuccess;
 
   const ask = (text: string) => {
-    const message = text.trim();
-    if (!jobId || !result || !message || send.isPending) return;
+    const content = text.trim();
+    if (!canAsk || !content || send.isPending) return;
 
-    setMessages(prev => [...prev, { role: 'user', content: message }]);
-    send.mutate({ message, history: messages });
+    send.mutate(content);
   }
 
   const renderAnalysisState = () => {
@@ -84,8 +89,6 @@ const Chat = ({ jobId, onRunningChange, onRestart }: ChatProps) => {
     return null;
   }
 
-  const canAsk = !!jobId && !!result;
-
   return (
     <ChatRoot aria-label="Чат по анализу">
       {renderAnalysisState()}
@@ -96,9 +99,10 @@ const Chat = ({ jobId, onRunningChange, onRestart }: ChatProps) => {
         </PanelHeader>
 
         <Messages role="log" aria-live="polite" data-count={messages.length}>
-          {/* TODO: шаблон сообщений — messages ({ role, content }) пока не отрисовываются */}
+          {/* TODO: шаблон сообщений — messages (ChatMessage: id, role, content, created_at) пока не отрисовываются */}
           {!jobId && <Hint>Запустите анализ или выберите сессию в «Мои отчёты»</Hint>}
-          {jobId && !result && !isError && <Hint>Вопросы можно задать, когда анализ завершится</Hint>}
+          {chat.isPending && jobId && <Hint>Загружаем сообщения…</Hint>}
+          {chat.isError && <ErrorText role="alert">Не удалось загрузить сообщения сессии</ErrorText>}
           {canAsk && messages.length === 0 && <Hint>Задайте вопрос по результатам анализа</Hint>}
           {send.isError && <ErrorText role="alert">Не удалось отправить сообщение. Попробуйте ещё раз.</ErrorText>}
         </Messages>
