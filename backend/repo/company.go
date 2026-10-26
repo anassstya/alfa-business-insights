@@ -38,6 +38,20 @@ func (r *CompanyRepository) GetByDemoUserID(ctx context.Context, userID int64) (
 	}
 
 	rows, err := r.db.Query(ctx, `
+		WITH eligible_groups AS (
+			SELECT group_id
+			FROM companies
+			WHERE group_id IS NOT NULL
+			GROUP BY group_id
+			HAVING SUM(
+				CASE
+					WHEN revenue_company IS NOT NULL
+						AND revenue_company <> 1000
+					THEN revenue_company
+					ELSE 0
+				END
+			) > 15000000000
+		)
 		SELECT DISTINCT
 			c.id,
 			c.synthetic_u,
@@ -57,8 +71,12 @@ func (r *CompanyRepository) GetByDemoUserID(ctx context.Context, userID int64) (
 			ON u.synthetic_f = pcl.synthetic_f
 		JOIN companies c
 			ON pcl.synthetic_u = c.synthetic_u
+		JOIN eligible_groups eg
+			ON c.group_id = eg.group_id
 		WHERE u.id = $1
 			AND c.cl_type = 'CLIENT'
+			AND c.revenue_company IS NOT NULL
+			AND c.revenue_company <> 1000
 		ORDER BY c.id
 	`, userID)
 
@@ -106,9 +124,27 @@ func (r *CompanyRepository) GetAll(ctx context.Context, limit int, offset int) (
 	var total int64
 
 	err := r.db.QueryRow(ctx, `
+		WITH eligible_groups AS (
+			SELECT group_id
+			FROM companies
+			WHERE group_id IS NOT NULL
+			GROUP BY group_id
+			HAVING SUM(
+				CASE
+					WHEN revenue_company IS NOT NULL
+						AND revenue_company <> 1000
+					THEN revenue_company
+					ELSE 0
+				END
+			) > 15000000000
+		)
 		SELECT COUNT(*)
-		FROM companies
-		WHERE cl_type = 'CLIENT'
+		FROM companies c
+		JOIN eligible_groups eg
+			ON c.group_id = eg.group_id
+		WHERE c.cl_type = 'CLIENT'
+			AND c.revenue_company IS NOT NULL
+			AND c.revenue_company <> 1000
 	`).Scan(&total)
 
 	if err != nil {
@@ -116,23 +152,41 @@ func (r *CompanyRepository) GetAll(ctx context.Context, limit int, offset int) (
 	}
 
 	rows, err := r.db.Query(ctx, `
+		WITH eligible_groups AS (
+			SELECT group_id
+			FROM companies
+			WHERE group_id IS NOT NULL
+			GROUP BY group_id
+			HAVING SUM(
+				CASE
+					WHEN revenue_company IS NOT NULL
+						AND revenue_company <> 1000
+					THEN revenue_company
+					ELSE 0
+				END
+			) > 15000000000
+		)
 		SELECT
-			id,
-			synthetic_u,
-			city,
-			region,
-			NULLIF(revenue_company, 1000) AS revenue_company,
-			mainokved_name,
-			mainokved_code,
-			org_type,
-			okfs_name,
-			company_age_years_gradation,
-			eco_mark_label,
-			amount_workers_fns_gradation,
-			cl_type
-		FROM companies
-		WHERE cl_type = 'CLIENT'
-		ORDER BY id
+			c.id,
+			c.synthetic_u,
+			c.city,
+			c.region,
+			NULLIF(c.revenue_company, 1000) AS revenue_company,
+			c.mainokved_name,
+			c.mainokved_code,
+			c.org_type,
+			c.okfs_name,
+			c.company_age_years_gradation,
+			c.eco_mark_label,
+			c.amount_workers_fns_gradation,
+			c.cl_type
+		FROM companies c
+		JOIN eligible_groups eg
+			ON c.group_id = eg.group_id
+		WHERE c.cl_type = 'CLIENT'
+			AND c.revenue_company IS NOT NULL
+			AND c.revenue_company <> 1000
+		ORDER BY c.id
 		LIMIT $1 OFFSET $2
 	`, limit, offset)
 
@@ -196,7 +250,7 @@ func (r *CompanyRepository) GetByID(ctx context.Context, companyID int64) (*mode
 			cl_type
 		FROM companies
 		WHERE id = $1
-		  AND cl_type = 'CLIENT'
+			AND cl_type = 'CLIENT'
 	`, companyID).Scan(
 		&company.ID,
 		&company.SyntheticU,
