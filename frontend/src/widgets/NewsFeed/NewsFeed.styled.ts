@@ -82,8 +82,38 @@ const LoadMore = styled.div`
   }
 `
 
-const Purpose = styled.div`
-  width: 100%;
+const Launcher = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 24px;
+  background-color: ${({ theme }) => theme.colors.secondary.cardBg};
 `
 
-export { FeedRoot, Summary, DayGroup, DayLabel, StateMessage, StateIcon, StateText, LoadMore, Purpose };
+const LauncherHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+`
+
+const LauncherTitle = styled.h3`
+  margin: 0;
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary.text};
+`
+
+const LauncherHint = styled.div`
+  margin-top: -8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: ${({ theme }) => theme.colors.secondary.textSecondary};
+`
+
+export {
+  FeedRoot, Summary, DayGroup, DayLabel, StateMessage, StateIcon, StateText, LoadMore, Launcher, LauncherHeader,
+  LauncherTitle, LauncherHint,
+};

@@ -9,9 +9,10 @@ interface Props extends PropsWithChildren{
   width?: number;
   onClose?(): void;
   opened?: boolean;
+  preventSimpleClose?: boolean
 }
 
-const Modal = ({ header, width, children, onClose, opened }: Props) => {
+const Modal = ({ header, width, children, onClose, opened, preventSimpleClose = false }: Props) => {
   if (!opened) {
     return null;
   }
@@ -19,9 +20,9 @@ const Modal = ({ header, width, children, onClose, opened }: Props) => {
   return (
     createPortal(
       <>
-        <Overlay />
+        <Overlay onClick={preventSimpleClose ? undefined : onClose}/>
         <ModalStyled width={width}>
-          {onClose && <CloseButton><CrossIcon width="16px" height="24px" /></CloseButton>}
+          {onClose && <CloseButton onClick={onClose}><CrossIcon width="16px" height="24px" /></CloseButton>}
             <Title.H2>{header}</Title.H2>
             <Content>{children}</Content>
         </ModalStyled>

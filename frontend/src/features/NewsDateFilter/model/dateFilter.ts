@@ -1,5 +1,4 @@
 import { addDays, toIsoDate } from "@/shared";
-import type { NewsFilters } from "@/entities";
 
 type DatePreset = 'all' | 'today' | 'week' | 'month' | 'custom';
 
@@ -19,7 +18,7 @@ const DATE_PRESETS: Array<{ value: DatePreset, label: string }> = [
 
 const DEFAULT_DATE_FILTER: DateFilterValue = { preset: 'all', from: '', to: '' };
 
-const toNewsFilters = ({ preset, from, to }: DateFilterValue, now = new Date()): NewsFilters => {
+const toNewsFilters = ({ preset, from, to }: DateFilterValue, now = new Date()) => {
   const today = toIsoDate(now);
 
   switch (preset) {

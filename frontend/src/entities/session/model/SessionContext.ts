@@ -7,6 +7,11 @@ interface SessionContextValue {
   setCompanyId(id: number | null): void;
   setRole(role: string): void;
   setUserId(userId: number): void
+  purpose?: string;
+  setPurpose(purpose: string): void
+  /** выбранная сессия анализа (jobId) — та, что показана в ленте */
+  activeJobId?: string;
+  setActiveJobId(jobId: string | undefined): void
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
