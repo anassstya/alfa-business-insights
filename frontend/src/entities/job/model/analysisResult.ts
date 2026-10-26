@@ -6,6 +6,7 @@ import type { AnalysisFail, AnalysisProgress, AnalysisResult } from "./types";
 const analysisKeys = {
   all: ['analysis'] as const,
   result: (jobId: string) => [...analysisKeys.all, 'result', jobId] as const,
+  history: (userId: number) => [...analysisKeys.all, 'history', userId] as const,
 }
 
 /**

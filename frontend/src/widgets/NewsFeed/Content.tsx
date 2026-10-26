@@ -5,7 +5,8 @@ import { AnalysisSessionsMenu, Purpose } from "@/features"
 import {
   Launcher, LauncherHeader, LauncherHint, LauncherTitle, StateIcon, StateMessage, StateText,
 } from "./NewsFeed.styled"
-import { useAnalysisSessions } from "@/entities/job";
+import { useQueryClient } from "@tanstack/react-query";
+import { analysisKeys, useAnalysisSessions } from "@/entities/job";
 import { Chat } from "../Chat";
 
 const FeedState = ({ icon, title, text, action }: { icon: string, title: string, text?: string, action?: ReactNode }) => (
@@ -24,6 +25,7 @@ const Content = () => {
   const roles = useRoleContext();
   const { data: company } = useCompany(companyId);
   const { addSession } = useAnalysisSessions(userId);
+  const queryClient = useQueryClient();
 
   // запуск — только здесь и только по кнопке «Начать анализ»; за ходом анализа (SSE) следит чат
   const start = useStartCompanyAnalysis();
@@ -49,6 +51,8 @@ const Content = () => {
           createdAt: new Date().toISOString(),
         });
         setActiveJobId(jobId);
+        // новая задача уже в истории на сервере — обновляем «Мои отчёты»
+        if (userId) queryClient.invalidateQueries({ queryKey: analysisKeys.history(userId) });
       },
     });
   }
@@ -73,13 +77,14 @@ const Content = () => {
         />
       )}
 
-      {/* key: у каждой сессии своя подписка на SSE и своя история сообщений */}
-      <Chat
-        key={activeJobId ?? 'no-session'}
-        jobId={activeJobId}
-        onRunningChange={setIsJobRunning}
-        onRestart={canStart ? () => startAnalysis((purpose ?? '').trim()) : undefined}
-      />
+      {!start.isError && activeJobId && (
+        <Chat
+          key={activeJobId ?? 'no-session'}
+          jobId={activeJobId}
+          onRunningChange={setIsJobRunning}
+          onRestart={canStart ? () => startAnalysis((purpose ?? '').trim()) : undefined}
+        />
+      )}
     </>
   )
 }

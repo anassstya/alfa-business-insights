@@ -172,13 +172,44 @@ const RemoveButton = styled.button`
   }
 `
 
-const EmptyText = styled.div`
+const EmptyText = styled.div<{ $error?: boolean }>`
   padding: 12px;
   font-size: 14px;
-  color: ${({ theme }) => theme.colors.secondary.textSecondary};
+  color: ${({ theme, $error }) => $error ? theme.colors.utility.error : theme.colors.secondary.textSecondary};
+`
+
+const ItemTop = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  /* длинная цель обрезается многоточием, статус остаётся видимым */
+  & > :first-child {
+    min-width: 0;
+  }
+`
+
+const STATUS_COLORS = {
+  progress: { background: '#FFF3DC', color: '#9A5B00' },
+  success: { background: '#E6F6EC', color: '#0B7A3E' },
+  error: { background: '#FDECEA', color: '#C4231A' },
+  neutral: { background: '#F2F3F5', color: '#2B2F36' },
+} as const;
+
+/** Статус задачи из истории: «В очереди», «Выполняется», «Готов», «Ошибка» */
+const StatusBadge = styled.span<{ $tone: keyof typeof STATUS_COLORS }>`
+  flex-shrink: 0;
+  padding: 0 8px;
+  border-radius: 100px;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 600;
+  background-color: ${({ $tone }) => STATUS_COLORS[$tone].background};
+  color: ${({ $tone }) => STATUS_COLORS[$tone].color};
 `
 
 export {
   MenuRoot, Trigger, Count, Popover, List, NewButton, Item, ItemButton, ItemTitle, ItemMeta, RemoveButton,
-  EmptyText,
+  EmptyText, ItemTop, StatusBadge,
 };

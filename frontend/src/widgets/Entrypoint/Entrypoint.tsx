@@ -1,5 +1,5 @@
 import { Button, Flex, Modal, Radio, RadioGroup, Text } from "@/shared"
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Form, UserCard } from "./Entrypoint.styled";
 import { UsersLoader } from "./UsersLoader";
 import { Controller, useForm } from "react-hook-form";
@@ -27,14 +27,14 @@ const Entrypoint = () => {
   // const options = useMemo(() => roles.map(role => ({value: role.code, label: role.full_name})),[roles])
   const { setRole, setCompanyId, setUserId } = useSession()
   const formType = watch('formType')
-  useEffect(() => {
-    setValues({
-        formType,
-        companyId: undefined,
-        role: undefined,
-        userId: undefined,
-      }, { shouldTouch: true })
-  }, [formType, setValues])
+  // useEffect(() => {
+  //   setValues({
+  //       formType,
+  //       companyId: undefined,
+  //       role: undefined,
+  //       userId: undefined,
+  //     }, { shouldTouch: true })
+  // }, [formType, setValues])
   const { data: users = [], isPending: usersPending } = useDemoUsers();
   const onSubmit = ({companyId , role, userId }: { userId: number, companyId: number, role: string}) => {
     if (role && companyId) {

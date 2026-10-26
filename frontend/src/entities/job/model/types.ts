@@ -85,7 +85,31 @@ interface AnalysisFail {
   error?: string;
 }
 
+/**
+ * Статус задачи анализа. FIXME(openapi): в спецификации это просто string —
+ * backend создаёт задачу со статусом `pending`, дальше статусы выставляет ML.
+ */
+type AnalysisJobStatus = string;
+
+/** Элемент `jobs[]` в GET /api/v1/demo/users/{id}/analysis/jobs (AnalysisJobSummary) */
+interface AnalysisJobSummary {
+  job_id: string;
+  company_id: number;
+  role: string;
+  goal?: string | null;
+  status: AnalysisJobStatus;
+  stage?: string | null;
+  /** ISO 8601 */
+  created_at: string;
+}
+
+/** Ответ GET /api/v1/demo/users/{id}/analysis/jobs — задачи от новых к старым */
+interface AnalysisJobsResponse {
+  jobs: AnalysisJobSummary[];
+}
+
 export type {
   Level, Sentiment, Trend, AnalysisMetric, AnalysisSource, AnalysisInsight, AnalysisRisk,
   AnalysisOpportunity, AnalysisRecommendation, AnalysisResult, AnalysisProgress, AnalysisFail,
+  AnalysisJobStatus, AnalysisJobSummary, AnalysisJobsResponse,
 };
