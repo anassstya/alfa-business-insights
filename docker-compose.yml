@@ -20,9 +20,11 @@ services:
       - "8080:8080"
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL_is_required}
+      ML_MODE: ${ML_MODE:-http}
+      ML_HTTP_TIMEOUT: ${ML_HTTP_TIMEOUT:-8m}
       ML_SERVICE_URL: ${ML_SERVICE_URL:-http://ml:8000}
-      ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:?ML_SERVICE_TOKEN_is_required}
-      ML_CALLBACK_TOKEN: ${ML_CALLBACK_TOKEN:?ML_CALLBACK_TOKEN_is_required}
+      ML_SERVICE_TOKEN: ${ML_SERVICE_TOKEN:-}
+      ML_CALLBACK_TOKEN: ${ML_CALLBACK_TOKEN:-}
     networks:
       - hack_network
 

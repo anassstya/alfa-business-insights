@@ -16,3 +16,11 @@
 Из корня проекта выполнить:
 1) docker run -d --name swagger-ui -p 8081:8080 -e SWAGGER_JSON=/api/openapi.yaml -v "$(pwd)/backend/api:/api:ro" swaggerapi/swagger-ui
 2) Перейти на http://localhost:8081
+
+Интеграция ML и запуск без модели: [backend/ML_INTEGRATION.md](backend/ML_INTEGRATION.md).
+
+Локальная PostgreSQL, интеграционные тесты и ручная проверка API с Mock ML: [backend/POSTGRES_TESTING.md](backend/POSTGRES_TESTING.md).
+
+Надёжность фонового анализа, миграция 007 и восстановление после рестарта: [backend/ANALYSIS_RECOVERY.md](backend/ANALYSIS_RECOVERY.md).
+
+Синхронный чат анализа с Mock ML: [backend/CHAT.md](backend/CHAT.md).

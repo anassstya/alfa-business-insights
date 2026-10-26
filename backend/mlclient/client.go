@@ -35,6 +35,10 @@ type AnalysisRequest struct {
 }
 
 func (c *Client) Analyze(ctx context.Context, req AnalysisRequest) (json.RawMessage, error) {
+	return c.post(ctx, "/internal/analyze-company", req)
+}
+
+func (c *Client) post(ctx context.Context, path string, req any) (json.RawMessage, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
@@ -43,7 +47,7 @@ func (c *Client) Analyze(ctx context.Context, req AnalysisRequest) (json.RawMess
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		c.baseURL+"/internal/analyze-company",
+		c.baseURL+path,
 		bytes.NewReader(body),
 	)
 	if err != nil {
@@ -51,7 +55,9 @@ func (c *Client) Analyze(ctx context.Context, req AnalysisRequest) (json.RawMess
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	if c.token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	}
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -59,17 +65,17 @@ func (c *Client) Analyze(ctx context.Context, req AnalysisRequest) (json.RawMess
 	}
 	defer resp.Body.Close()
 
-	result, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	result, err := io.ReadAll(io.LimitReader(resp.Body, (8<<20)+1))
 	if err != nil {
 		return nil, err
 	}
 
+	if len(result) > 8<<20 {
+		return nil, fmt.Errorf("ML response exceeds 8 MiB")
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(
-			"ML returned status %d: %s",
-			resp.StatusCode,
-			string(result),
-		)
+		return nil, fmt.Errorf("ML returned status %d", resp.StatusCode)
 	}
 
 	if !json.Valid(result) {

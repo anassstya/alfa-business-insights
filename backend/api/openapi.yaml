@@ -704,9 +704,10 @@ paths:
       tags:
         - Chat
       summary: Отправить сообщение в чат аналитической сессии
-      description: 'Текущее поведение: сохраняет только сообщение пользователя в chat_messages для job_id и возвращает
-        его message_id. Ответ ML, история assistant и вызов /internal/chat ещё НЕ подключены. Планируемый ML chat
-        контракт остаётся черновым; этот маршрут пока не запускает генерацию AI.'
+      description: 'Синхронно передаёт сообщение и последние 12 сообщений в ML/Mock для завершённого анализа.
+        При успехе сохраняет user и assistant одной транзакцией и возвращает message_id пользователя.
+        Ответ assistant доступен через GET истории. Лимит обработки 30 секунд. При ошибке обмен не сохраняется.
+        Одновременный POST для той же сессии возвращает 409. Авторизация пользователя пока отсутствует в демоверсии.'
       operationId: sendChatMessage
       parameters:
         - $ref: '#/components/parameters/JobID'
@@ -732,6 +733,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Анализ не готов или другой запрос чата этой сессии ещё выполняется
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Ошибка ML или некорректный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: ML-чат не настроен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Превышено время обработки сообщения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Внутренняя ошибка сервера
           content:
@@ -739,7 +764,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '201':
-          description: Сообщение пользователя сохранено, генерация ответа ML не выполняется.
+          description: Сообщения пользователя и ML сохранены; message_id указывает на сообщение пользователя.
           content:
             application/json:
               schema:
@@ -749,14 +774,14 @@ paths:
       tags:
         - Chat
       summary: Получать ответы AI через SSE
-      description: Ручка зарезервирована под SSE чата, но в текущем handler возвращает HTTP 503. ML-чат находится
-        в разработке, протокол SSE не согласован.
+      description: Резервный endpoint возвращает HTTP 503. MVP использует синхронный POST сообщений и GET истории;
+        стриминг чата не реализован.
       operationId: streamChatEvents
       parameters:
         - $ref: '#/components/parameters/JobID'
       responses:
         '503':
-          description: Получение ответов ML пока не подключено.
+          description: Стриминг чата не используется.
           content:
             application/json:
               schema:
@@ -1708,6 +1733,7 @@ components:
         content:
           type: string
           minLength: 1
+          maxLength: 4000
           description: Непустое после trimSpace сообщение пользователя.
       example:
         content: Почему этот риск важен для финансового директора?
@@ -1737,6 +1763,6 @@ tags:
   - name: Analysis
     description: Задания, результаты анализа и SSE.
   - name: Chat
-    description: Сообщения чата аналитической сессии. Интеграция с ML пока не завершена.
+    description: Синхронный чат завершённой аналитической сессии через ML или Mock.
   - name: Internal ML
     description: Внутренние callback-запросы ML → Go.

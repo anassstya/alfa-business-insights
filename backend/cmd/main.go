@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"alfa-business-insights/backend/handler"
@@ -16,23 +20,23 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		log.Fatal("DATABASE_URL is not set")
+		return errors.New("DATABASE_URL is not set")
 	}
 
-	mlURL := os.Getenv("ML_SERVICE_URL")
-	if mlURL == "" {
-		log.Fatal("ML_SERVICE_URL is not set")
+	mlClient, err := mlclient.FromEnvironment(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("invalid ML configuration: %w", err)
 	}
-
-	mlToken := os.Getenv("ML_SERVICE_TOKEN")
-	if mlToken == "" {
-		log.Fatal("ML_SERVICE_TOKEN is not set")
-	}
-
-	if os.Getenv("ML_CALLBACK_TOKEN") == "" {
-		log.Fatal("ML_CALLBACK_TOKEN is not set")
+	if os.Getenv("ML_MODE") != "mock" && os.Getenv("ML_CALLBACK_TOKEN") == "" {
+		return errors.New("ML_CALLBACK_TOKEN is not set")
 	}
 
 	ctx, cancel := context.WithTimeout(
@@ -43,18 +47,85 @@ func main() {
 
 	db, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
-		log.Fatalf("Failed to create database pool: %v", err)
+		return fmt.Errorf("create database pool: %w", err)
 	}
 	defer db.Close()
 
 	if err := db.Ping(ctx); err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		return fmt.Errorf("connect to database: %w", err)
 	}
 
 	log.Println("Connected to PostgreSQL successfully")
 
-	mlClient := mlclient.NewClient(mlURL, mlToken)
+	workerCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	workerRepo := repo.NewAnalysisRepository(db)
+	worker := service.NewAnalysisService(workerRepo, mlClient)
+	workerDone := make(chan struct{})
+	go func() { defer close(workerDone); worker.Run(workerCtx, workerRepo) }()
+	defer func() { stop(); <-workerDone }()
 
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           cors(newMux(db, mlClient)),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	log.Println("Server started on port 8080")
+
+	shutdownDone := make(chan struct{})
+	go func() {
+		defer close(shutdownDone)
+		<-workerCtx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("HTTP shutdown: %v", err)
+			server.Close()
+		}
+	}()
+	serveErr := server.ListenAndServe()
+	stop()
+	<-shutdownDone
+	if errors.Is(serveErr, http.ErrServerClosed) {
+		return nil
+	}
+	return serveErr
+}
+
+func cors(next http.Handler) http.Handler {
+	allowedOrigins := map[string]bool{
+		"http://localhost:8081": true,
+		"http://localhost:3000": true,
+		"http://localhost:5173": true,
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+
+		if origin != "" && allowedOrigins[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
+
+		if r.Method == http.MethodOptions {
+			if origin != "" && !allowedOrigins[origin] {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// newMux wires the same production routes for the server and integration tests.
+func newMux(db *pgxpool.Pool, mlClient mlclient.Analyzer) http.Handler {
 	roleRepo := repo.NewRoleRepository(db)
 	roleHandler := handler.NewRoleHandler(roleRepo)
 
@@ -71,10 +142,14 @@ func main() {
 	)
 	analysisHandler := handler.NewAnalysisHandler(analysisService)
 
+	// Analysis-only test doubles need not implement chat; configured HTTP and
+	// Mock clients implement both interfaces.
+	chatClient, _ := mlClient.(mlclient.Chatter)
 	chatRepo := repo.NewChatRepository(db)
 	chatService := service.NewChatService(
 		chatRepo,
 		analysisRepo,
+		chatClient,
 	)
 	chatHandler := handler.NewChatHandler(chatService)
 
@@ -145,44 +220,5 @@ func main() {
 		chatHandler.StreamChatEvents,
 	)
 
-	server := &http.Server{
-		Addr:              ":8080",
-		Handler:           cors(mux),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
-
-	log.Println("Server started on port 8080")
-
-	log.Fatal(server.ListenAndServe())
-}
-
-func cors(next http.Handler) http.Handler {
-	allowedOrigins := map[string]bool{
-		"http://localhost:8081": true,
-		"http://localhost:3000": true,
-		"http://localhost:5173": true,
-	}
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-
-		if origin != "" && allowedOrigins[origin] {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Add("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		}
-
-		if r.Method == http.MethodOptions {
-			if origin != "" && !allowedOrigins[origin] {
-				w.WriteHeader(http.StatusForbidden)
-				return
-			}
-
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
+	return mux
 }
