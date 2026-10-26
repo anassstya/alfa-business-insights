@@ -103,7 +103,7 @@ paths:
       tags:
         - Companies
       summary: Получить компании пользователя
-      description: Возвращает компании выбранного демопользователя со статусом CLIENT и их основные характеристики.
+      description: Возвращает компании выбранного демопользователя, у которых cl_type=CLIENT, выручка заполнена и не равна 1000, а суммарная выручка группы (group_id) по всей таблице companies превышает 15 млрд. Наличие подготовленного ML-профиля этим не гарантируется.
       operationId: getDemoUserCompanies
       parameters:
         - name: id
@@ -187,40 +187,33 @@ paths:
                           description: Статус компании — действующий клиент
               example:
                 companies:
-                  - id: 123
-                    synthetic_u: U_12345
-                    city: Краснодар
-                    region: Краснодарский край
-                    revenue_company: 150000000
-                    mainokved_name: Аренда и управление недвижимым имуществом
-                    mainokved_code: '68.20'
-                    org_type: ООО
-                    okfs_name: Частная собственность
+                  - id: 31259
+                    synthetic_u: U_136101
                     cl_type: CLIENT
         '400':
           description: Некорректный ID пользователя
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
         '404':
           description: Пользователь не найден
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
         '500':
           description: Внутренняя ошибка сервера
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
   /api/v1/companies:
     get:
       tags:
         - Companies
-      summary: Получить список компаний со статусом CLIENT
-      description: Возвращает компании со статусом CLIENT с пагинацией.
+      summary: Получить компании, доступные по финансовым фильтрам
+      description: Возвращает компании с cl_type=CLIENT, заполненной выручкой, отличной от заглушки 1000, и group_id с суммарной выручкой группы более 15 млрд (сумма по всей таблице companies). Пагинация после фильтрации. Наличие ML-профиля не гарантируется.
       operationId: getCompanies
       parameters:
         - name: limit
@@ -303,43 +296,25 @@ paths:
                   total:
                     type: integer
                     format: int64
-                    description: Общее количество компаний со статусом CLIENT
+                    description: Общее количество компаний, прошедших фильтры клиента, выручки и группы
                   limit:
                     type: integer
                     description: Размер страницы
                   offset:
                     type: integer
                     description: Смещение от начала списка
-              example:
-                companies:
-                  - id: 123
-                    synthetic_u: U_12345
-                    city: Краснодар
-                    region: Краснодарский край
-                    revenue_company: 150000000
-                    mainokved_name: Аренда недвижимого имущества
-                    mainokved_code: '68.20'
-                    org_type: ООО
-                    okfs_name: Частная собственность
-                    company_age_years_gradation: 5-10 лет
-                    eco_mark_label: null
-                    amount_workers_fns_gradation: 10-50
-                    cl_type: CLIENT
-                total: 41968
-                limit: 20
-                offset: 0
         '400':
           description: Некорректные параметры пагинации
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
         '500':
           description: Внутренняя ошибка сервера
           content:
-            application/json:
+            text/plain:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
   /api/v1/companies/{companyID}:
     get:
       tags:
@@ -704,9 +679,9 @@ paths:
       tags:
         - Chat
       summary: Отправить сообщение в чат аналитической сессии
-      description: 'Синхронно передаёт сообщение и последние 12 сообщений в ML/Mock для завершённого анализа.
-        При успехе сохраняет user и assistant одной транзакцией и возвращает message_id пользователя.
-        Ответ assistant доступен через GET истории. Лимит обработки 30 секунд. При ошибке обмен не сохраняется.
+      description: 'Синхронно отправляет сообщение и историю из последних 12 сообщений в ML/Mock для завершённого анализа.
+        При успехе сохраняет user и assistant атомарно и возвращает message_id пользователя.
+        Ответ assistant доступен через GET истории. Лимит обработки Go ChatService — 120 секунд (если клиент не отменит запрос раньше). При ошибке обмен не сохраняется.
         Одновременный POST для той же сессии возвращает 409. Авторизация пользователя пока отсутствует в демоверсии.'
       operationId: sendChatMessage
       parameters:
@@ -773,7 +748,7 @@ paths:
     get:
       tags:
         - Chat
-      summary: Получать ответы AI через SSE
+      summary: SSE чата недоступен (заглушка HTTP 503)
       description: Резервный endpoint возвращает HTTP 503. MVP использует синхронный POST сообщений и GET истории;
         стриминг чата не реализован.
       operationId: streamChatEvents
@@ -1630,10 +1605,9 @@ components:
         status:
           $ref: '#/components/schemas/AnalysisStatus'
         stage:
-          type: object
+          type: string
           nullable: true
-          allOf:
-            - $ref: '#/components/schemas/AnalysisStage'
+          enum: [loading_profile, mapping_exposures, planning, retrieving, analyzing, validating, completed, null]
         created_at:
           type: string
           format: date-time
@@ -1676,10 +1650,9 @@ components:
         status:
           $ref: '#/components/schemas/AnalysisCallbackStatus'
         stage:
-          type: object
+          type: string
           nullable: true
-          allOf:
-            - $ref: '#/components/schemas/AnalysisStage'
+          enum: [loading_profile, mapping_exposures, planning, retrieving, analyzing, validating, completed, null]
         result:
           type: object
           nullable: true
@@ -1759,10 +1732,11 @@ tags:
   - name: Demo Users
     description: Демонстрационные пользователи.
   - name: Companies
-    description: Компании со статусом CLIENT.
+    description: Компании, фильтруемые по типу клиента, выручке и группе.
   - name: Analysis
     description: Задания, результаты анализа и SSE.
   - name: Chat
     description: Синхронный чат завершённой аналитической сессии через ML или Mock.
   - name: Internal ML
     description: Внутренние callback-запросы ML → Go.
+

@@ -33,7 +33,11 @@ type ChatService struct {
 	ml           mlclient.Chatter
 }
 
-func NewChatService(chatRepo *repo.ChatRepository, analysisRepo *repo.AnalysisRepository, ml mlclient.Chatter) *ChatService {
+func NewChatService(
+	chatRepo *repo.ChatRepository,
+	analysisRepo *repo.AnalysisRepository,
+	ml mlclient.Chatter,
+) *ChatService {
 	return &ChatService{
 		chatRepo:     chatRepo,
 		analysisRepo: analysisRepo,
@@ -41,7 +45,10 @@ func NewChatService(chatRepo *repo.ChatRepository, analysisRepo *repo.AnalysisRe
 	}
 }
 
-func (s *ChatService) checkJob(ctx context.Context, jobID string) (*model.AnalysisJob, error) {
+func (s *ChatService) checkJob(
+	ctx context.Context,
+	jobID string,
+) (*model.AnalysisJob, error) {
 	if !chatUUIDPattern.MatchString(jobID) {
 		return nil, ErrChatInvalidInput
 	}
@@ -50,13 +57,18 @@ func (s *ChatService) checkJob(ctx context.Context, jobID string) (*model.Analys
 	if err != nil {
 		return nil, err
 	}
+
 	if job == nil {
 		return nil, ErrChatJobNotFound
 	}
+
 	return job, nil
 }
 
-func (s *ChatService) GetMessages(ctx context.Context, jobID string) ([]model.ChatMessage, error) {
+func (s *ChatService) GetMessages(
+	ctx context.Context,
+	jobID string,
+) ([]model.ChatMessage, error) {
 	if _, err := s.checkJob(ctx, jobID); err != nil {
 		return nil, err
 	}
@@ -64,57 +76,106 @@ func (s *ChatService) GetMessages(ctx context.Context, jobID string) ([]model.Ch
 	return s.chatRepo.GetMessages(ctx, jobID)
 }
 
-// SaveUserMessage preserves the existing entry point and returns the user's ID
-// only once both sides of the synchronous exchange have committed.
-func (s *ChatService) SaveUserMessage(ctx context.Context, jobID string, content string) (string, error) {
-	if strings.TrimSpace(content) == "" || utf8.RuneCountInString(content) > 4000 {
+func (s *ChatService) SaveUserMessage(
+	ctx context.Context,
+	jobID string,
+	content string,
+) (string, error) {
+	content = strings.TrimSpace(content)
+
+	if content == "" || utf8.RuneCountInString(content) > 4000 {
 		return "", ErrChatInvalidInput
 	}
-	// Bound the whole turn, including SQL and the ML call. No background retries.
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+
+	// Maximum time for one complete chat exchange.
+	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
+
 	job, err := s.checkJob(ctx, jobID)
 	if err != nil {
 		return "", err
 	}
+
 	jobID = job.ID
-	if job.Status != model.AnalysisStatusCompleted || len(job.Result) == 0 || string(job.Result) == "null" {
+
+	if job.Status != model.AnalysisStatusCompleted ||
+		len(job.Result) == 0 ||
+		string(job.Result) == "null" {
 		return "", ErrChatNotReady
 	}
+
 	if s.ml == nil {
 		return "", ErrChatUnavailable
 	}
+
 	userID, err := newChatUUID()
 	if err != nil {
 		return "", err
 	}
+
 	assistantID, err := newChatUUID()
 	if err != nil {
 		return "", err
 	}
-	user := model.ChatMessage{ID: userID, Role: "user", Content: content}
-	err = s.chatRepo.SaveExchange(ctx, jobID, user, func(messages []model.ChatMessage) (model.ChatMessage, error) {
-		history := make([]mlclient.ChatTurn, 0, len(messages))
-		for _, message := range messages {
-			// ML accepts at most 4000 characters per history turn; stored answers may be 8000.
-			runes := []rune(message.Content)
-			if len(runes) > 4000 {
-				runes = runes[:4000]
+
+	user := model.ChatMessage{
+		ID:      userID,
+		Role:    "user",
+		Content: content,
+	}
+
+	err = s.chatRepo.SaveExchange(
+		ctx,
+		jobID,
+		user,
+		func(messages []model.ChatMessage) (model.ChatMessage, error) {
+			history := make([]mlclient.ChatTurn, 0, len(messages))
+
+			for _, message := range messages {
+				runes := []rune(message.Content)
+
+				if len(runes) > 4000 {
+					runes = runes[:4000]
+				}
+
+				history = append(history, mlclient.ChatTurn{
+					Role:    message.Role,
+					Content: string(runes),
+				})
 			}
-			history = append(history, mlclient.ChatTurn{Role: message.Role, Content: string(runes)})
-		}
-		answer, err := s.ml.Chat(ctx, mlclient.ChatRequest{JobID: jobID, Message: content, History: history})
-		if err != nil {
-			return model.ChatMessage{}, fmt.Errorf("%w: %w", ErrChatML, err)
-		}
-		if answer.JobID != jobID || strings.TrimSpace(answer.Answer) == "" || utf8.RuneCountInString(answer.Answer) > 8000 {
-			return model.ChatMessage{}, ErrChatML
-		}
-		return model.ChatMessage{ID: assistantID, Role: "assistant", Content: answer.Answer}, nil
-	})
+
+			answer, err := s.ml.Chat(ctx, mlclient.ChatRequest{
+				JobID:   jobID,
+				Message: content,
+				History: history,
+			})
+
+			if err != nil {
+				return model.ChatMessage{}, fmt.Errorf(
+					"%w: %w",
+					ErrChatML,
+					err,
+				)
+			}
+
+			if answer.JobID != jobID ||
+				strings.TrimSpace(answer.Answer) == "" ||
+				utf8.RuneCountInString(answer.Answer) > 8000 {
+				return model.ChatMessage{}, ErrChatML
+			}
+
+			return model.ChatMessage{
+				ID:      assistantID,
+				Role:    "assistant",
+				Content: answer.Answer,
+			}, nil
+		},
+	)
+
 	if err != nil {
 		return "", err
 	}
+
 	return userID, nil
 }
 
