@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from dotenv import load_dotenv
+from .runtime_environment import load_runtime_environment
 from pydantic import Field, field_validator
 
 from .api import GatewayClient, ModelSettings
@@ -55,7 +55,7 @@ def analyze_company(company_id: int | str, role: Role, goal: str | None = None, 
 def _analyze_company(body: CompanyAnalysisInput, *, fixture_mode: bool | None = None,
                      callback_settings: CallbackSettings | None = None,
                      callback_client=None, evidence_cache: Path | None = None) -> AnalysisResult:
-    load_dotenv(ROOT / ".env", override=False)
+    load_runtime_environment()
     if fixture_mode is None:
         fixture_mode = os.getenv("ML_FIXTURE_MODE", "false").lower() in ("1", "true", "yes")
     repository = (JsonCompanyProfileRepository(ROOT / "ml/fixtures/company_profiles.json",

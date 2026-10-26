@@ -50,14 +50,20 @@ ML не выполняет INSERT/UPDATE в `analysis_jobs`. Отдельной 
 ## Запуск и подключение
 
 ```powershell
-docker compose --env-file .env --env-file ml/docker.example -f ml/docker-compose.yml up -d --build ml
+docker compose --env-file .env -f ml/docker-compose.yml up -d --build ml
+```
+
+Общий запуск frontend, backend и ML из корневого `.env`:
+
+```powershell
+docker compose --env-file .env -f docker-compose.yml -f ml/docker-compose.root.yml up -d --build
 ```
 
 Локально: `http://127.0.0.1:8001`; проверка процесса: `GET /health`.
 Корневой Compose, backend и frontend не требуется менять для запуска ML.
 
 - [Как подключить бэкенд: запросы, события, результат](docs/BACKEND_INTEGRATION.md).
-- [Docker и переменные окружения](docs/DOCKER.md).
+- [Запуск Docker](docs/DOCKER.md) и [минимальные env-настройки](docs/ENVIRONMENT.md).
 - [Данные и контракты](docs/DATA_CONTRACTS.md).
 - [Текущее состояние и следующие шаги, включая чат](docs/IMPLEMENTATION_PLAN.md).
 

@@ -3,8 +3,20 @@
 ## Назначение
 
 Чат отвечает на уточнения по одной завершённой сессии `analysis_jobs.id`.
-ML сам читает `analysis_jobs.result` из Supabase: инсайты, роль, цель, снимок
-профиля и evidence. История вопросов/ответов приходит от backend в запросе.
+ML сам читает запись `analysis_jobs` из Supabase:
+
+| Контекст чата | Откуда берётся |
+| --- | --- |
+| Компания | `analysis_jobs.company_id` (числовой ID), сверяется с `result.company_row_id`; строковый ID — `result.company_id`. |
+| Роль | `analysis_jobs.role`. |
+| Цель | `analysis_jobs.goal`, включая null при отсутствии цели. |
+| Контекст компании | `result.profile_snapshot` — профиль на момент исходного анализа. |
+| Инсайты | `result.insights`. |
+| Источники | `result.evidence`, а также evidence сохранённого `research_context`. |
+
+Новый профиль компании не подгружается поверх исторического снимка.
+Если снимок отсутствует, модель видит это ограничение; данные не достраиваются.
+История вопросов/ответов приходит от backend в запросе.
 Новый веб-поиск и повторное скачивание сайтов не выполняются: используются
 сохранённые фрагменты источников. При недостатке данных ответ обозначает ограничение.
 ML не пишет в `analysis_jobs` или `chat_messages`.
@@ -12,7 +24,7 @@ ML не пишет в `analysis_jobs` или `chat_messages`.
 ## Вызов из backend
 
 `POST http://ml:8000/internal/chat` в общей Docker-сети.
-С хоста — `http://127.0.0.1:8001/internal/chat` после обновления контейнера.
+С хоста — `http://127.0.0.1:8001/internal/chat`.
 Заголовки: `Authorization: Bearer <ML_SERVICE_TOKEN>` и
 `Content-Type: application/json`. Callback для чата не используется;
 ответ возвращается обычным HTTP JSON.
@@ -33,7 +45,8 @@ ML не пишет в `analysis_jobs` или `chat_messages`.
 передаётся отдельно в `message`, без дублирования в `history`.
 Роли истории: `user` и `assistant`. Допускаются необязательные `id` (UUID) и
 `created_at` (ISO-дата с часовым поясом), как в существующей модели backend.
-Роль пользователя и цель анализа берутся из сохранённого результата.
+Роль пользователя и цель берутся из колонок `analysis_jobs.role` и `goal`;
+передавать их повторно в запросе чата не нужно.
 
 Лимиты: вопрос — 4000 символов; история — до 12 сообщений по 8000 символов;
 суммарный сериализованный контекст модели — до 65 000 символов. При превышении
@@ -125,22 +138,83 @@ ML stateless: повтор одного запроса может повторн
 Ошибка содержит `detail.code`. `history` из другой сессии ML определить не
 может: backend обязан формировать её по переданному `job_id`.
 
-## Окружение и проверка
+## Общий корневой env
 
-По умолчанию `ML_CHAT_RESULT_SOURCE=supabase`. Используются существующие
-`POSTGRES_*` и `MODEL_API_KEY`. Требуется только SELECT к `analysis_jobs`.
-Обновить только ML из корня репозитория:
+Backend и ML используют один `.env` в корне репозитория:
+
+| Переменная | Для чего нужна |
+| --- | --- |
+| `DATABASE_URL` | Подключение backend к Supabase. ML её не читает. |
+| `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_CONNECTION_MODE` | Чтение сессии из Supabase на стороне ML. Для текущего transaction pooler: 6543 / transaction. |
+| `POSTGRES_SSLMODE` | require; можно не задавать, это default ML. |
+| `MODEL_API_KEY` | Ответы LLM в чате. |
+| `ML_SERVICE_URL` | http://ml:8000 для backend в общей Docker-сети. |
+| `ML_SERVICE_TOKEN` | Общий секрет backend → ML, включая `/internal/chat`. |
+| `ML_CALLBACK_TOKEN` | Второй общий секрет ML → backend для прогресса анализа. |
+| `TAVILY_API` | Нужен исследованию; чат этот ключ не использует. |
+
+Токены должны совпадать у обоих сервисов; рабочие значения уже записаны
+в корневой `.env`. `ML_MODE=http` не используется кодом и не нужен.
+По умолчанию чат читает Supabase: `ML_CHAT_RESULT_SOURCE` задавать не требуется.
+
+При Python-запуске ML читает корневой `.env`; при Docker-запуске Compose передаёт
+эти значения в окружение контейнера. Окружение процесса имеет приоритет.
+`ml/docker.example` — только standalone fallback, если корневой `.env` отсутствует.
+Для общей интеграции не подключать его вторым env-файлом: он может перекрыть
+согласованные с backend значения. [Подробности env](ENVIRONMENT.md).
+
+## Запуск из корня
+
+Все сервисы:
 
 ```powershell
-docker compose --env-file .env --env-file ml/docker.example -f ml/docker-compose.yml up -d --build ml
+docker compose --env-file .env -f docker-compose.yml -f ml/docker-compose.root.yml up -d --build
 ```
 
-Резервный адаптер `ML_CHAT_RESULT_SOURCE=backend` читает существующий
-`GET /api/v1/analysis/jobs/{job_id}` по адресу `ML_BACKEND_URL`; он не нужен
-при прямом чтении Supabase. История и в этом режиме приходит в запросе.
+Обновить только ML, оставив backend и frontend запущенными:
 
-Проверено 26 октября 2026: SELECT к `analysis_jobs` разрешён, таблица пока пуста.
-63 теста проходят; HTTP-обработчик также вернул 200 с настоящей моделью на
-демонстрационном сохранённом результате и истории. Это не проверка живой
-завершённой сессии из БД. Повторное развёртывание контейнера пока зависит от
-доступности Docker Engine; актуальный статус — в [DOCKER.md](DOCKER.md).
+```powershell
+docker compose --env-file .env -f docker-compose.yml -f ml/docker-compose.root.yml up -d --build ml
+```
+
+ML доступен backend по имени `ml:8000`, с хоста — по `127.0.0.1:8001`.
+Корневой Compose и код backend не изменяются дополнением из `ml/`.
+
+## Статусы и этапы — без переключения режима
+
+Для **исследования компании** Docker по умолчанию включает callback.
+ML отправляет `job_id`, `status`, `stage` в существующий
+`POST /api/v1/internal/analysis/events`; финальное событие также содержит `result`.
+Нужно настроить один раз общий `ML_CALLBACK_TOKEN` и запустить backend.
+Отдельного переключения режима перед запросом не требуется.
+Если `ML_CALLBACK_ENABLED` отсутствует в корневом env, Compose подставляет true.
+Явный `ML_CALLBACK_ENABLED=false` отключает события для диагностики.
+
+Статусы: running, completed, failed. Этапы: loading_profile, mapping_exposures,
+planning, retrieving, analyzing, validating, completed. Backend создаёт строку
+с pending до вызова ML и передаёт её `job_id`. При отсутствии `job_id` в коротком
+запросе анализа callback не отправляется. Подробности:
+[BACKEND_INTEGRATION.md](BACKEND_INTEGRATION.md).
+
+**Чат** отвечает синхронным JSON и не меняет статус завершённого анализа.
+Его ожидание и ошибка отображаются по началу запроса и HTTP-ответу.
+`mode=saved_analysis` в ответе — метка происхождения данных, не переключатель.
+`insufficient_context=true` обозначает нехватку данных, а не сбой сервиса.
+
+События чата нельзя отправлять в callback анализа: они перезапишут статус
+исходного `analysis_jobs`. Если нужны chat SSE, backend подключает отдельную
+chat-ручку с привязкой к `message_id`; текущий ML endpoint поток не возвращает.
+
+## Проверка
+
+SELECT к `analysis_jobs` разрешён; при последней проверке таблица была пуста.
+67 тестов проходят на хосте и в Linux-образе без внешней сети.
+Контейнер ML healthy, endpoint проверен: 401 без токена, 404 для отсутствующей
+сессии при настоящем чтении Supabase. Внутри контейнера HTTP-обработчик вернул
+200 с настоящей моделью на демонстрационном результате и истории, учёл компанию,
+роль, цель, обсуждение и источник. Тестовых заданий в БД не создавали.
+
+Общий запуск из корневого env также проверен: frontend отвечает, backend читает
+роли из Supabase, callback с согласованным токеном проходит авторизацию и
+возвращает 404 для отсутствующего задания. Полный live-анализ компании и чат
+по реальной завершённой сессии этой проверкой не подтверждаются.

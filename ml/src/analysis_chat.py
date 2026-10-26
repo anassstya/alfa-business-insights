@@ -10,7 +10,7 @@ from typing import Literal
 from uuid import UUID
 
 import httpx
-from dotenv import load_dotenv
+from .runtime_environment import load_runtime_environment
 from pydantic import Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -95,6 +95,20 @@ class ChatResponse(ChatAnswer):
     mode: Literal['saved_analysis'] = 'saved_analysis'
 
 
+def _session_result(result: AnalysisResult, job_id: UUID, company_row_id: int,
+                    role: str, goal: str | None) -> AnalysisResult:
+    """Job columns own identity/role/goal; result owns the historical facts."""
+    if result.job_id != job_id or result.company_row_id != company_row_id:
+        raise SessionNotReady('saved result does not match session company')
+    if result.profile_snapshot and result.profile_snapshot.company_id != result.company_id:
+        raise SessionNotReady('saved profile does not match session company')
+    if result.research_context and result.research_context.company_id != result.company_id:
+        raise SessionNotReady('saved research does not match session company')
+    data = result.model_dump(mode='json')
+    data.update(role=role, goal=goal)
+    return AnalysisResult.model_validate(data)
+
+
 class BackendChatRepository:
     """Read the existing backend endpoint; the backend owns analysis_jobs."""
 
@@ -124,9 +138,7 @@ class BackendChatRepository:
             if UUID(job['job_id']) != job_id or job.get('status') != 'completed' or not job.get('result'):
                 raise SessionNotReady('analysis is not completed or has no matching result')
             result = AnalysisResult.model_validate(job['result'])
-            if result.job_id != job_id:
-                raise SessionNotReady('saved result does not match session')
-            return result
+            return _session_result(result, job_id, job['company_id'], job['role'], job.get('goal'))
         except httpx.HTTPError as exc:
             raise SessionStoreUnavailable('backend result endpoint unreachable') from exc
         except (ValueError, KeyError, TypeError) as exc:
@@ -147,7 +159,8 @@ class SupabaseChatRepository:
         try:
             with self.engine.connect() as conn:
                 meta = conn.execute(text("""SELECT status, octet_length(result::text),
-                    length(result::text), md5(result::text) FROM public.analysis_jobs
+                    length(result::text), md5(result::text), company_id, role, goal,
+                    updated_at FROM public.analysis_jobs
                     WHERE id=CAST(:id AS uuid)"""), params).first()
             if meta is None:
                 raise SessionNotFound('analysis session not found')
@@ -161,15 +174,14 @@ class SupabaseChatRepository:
                 with self.engine.connect() as conn:
                     row = conn.execute(text("""SELECT substring(result::text FROM :offset FOR 1000)
                         FROM public.analysis_jobs WHERE id=CAST(:id AS uuid)
-                        AND status='completed' AND md5(result::text)=:version"""),
-                        {**params, 'offset': offset, 'version': meta[3]}).first()
+                        AND status='completed' AND md5(result::text)=:version
+                        AND updated_at=:updated_at"""),
+                        {**params, 'offset': offset, 'version': meta[3], 'updated_at': meta[7]}).first()
                 if row is None:
                     raise SessionNotReady('analysis changed during reading; retry')
                 parts.append(row[0])
             result = AnalysisResult.model_validate_json(''.join(parts))
-            if result.job_id != job_id:
-                raise SessionNotReady('saved result does not match session')
-            return result
+            return _session_result(result, job_id, meta[4], meta[5], meta[6])
         except SQLAlchemyError as exc:
             # Log/return no DSN, SQL parameters or credentials.
             raise SessionStoreUnavailable('analysis_jobs read unavailable; check SELECT permission and RLS') from exc
@@ -197,6 +209,7 @@ class AnalysisChat:
             evidence.update((e.evidence_id, e) for e in result.research_context.evidence)
         context = {
             'job_id': str(result.job_id), 'company_id': result.company_id,
+            'company_row_id': result.company_row_id,
             'role': result.role, 'goal': result.goal, 'as_of': result.as_of.isoformat(),
             'analysis_mode': result.mode, 'outcome': result.outcome,
             'insights': [i.model_dump(mode='json') for i in result.insights],
@@ -233,7 +246,7 @@ def answer_analysis_question(job_id: UUID | str, message: str, *,
                              history: list[dict] | None = None) -> ChatResponse:
     """Explain one saved session. Does not search, persist messages or update jobs."""
     request = ChatRequest(job_id=job_id, message=message, history=history or [])
-    load_dotenv(ROOT / '.env', override=False)
+    load_runtime_environment()
     source = os.getenv('ML_CHAT_RESULT_SOURCE', 'supabase')
     engine = None
     model = None

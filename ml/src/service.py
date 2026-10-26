@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Mapping
 
-from dotenv import load_dotenv
+from .runtime_environment import load_runtime_environment
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
 from .contracts import AnalysisRequest, AnalysisResult, CompanyResearchContext, SearchTask
@@ -38,7 +38,7 @@ def _enabled(value: str | None) -> bool:
 class ServiceSettings:
     def __init__(self, environ: Mapping[str, str] | None = None):
         if environ is None:
-            load_dotenv(ROOT / ".env", override=False)
+            load_runtime_environment()
             environ = os.environ
         self.fixture_mode = _enabled(environ.get("ML_FIXTURE_MODE"))
         self.local_dev_mode = _enabled(environ.get("ML_LOCAL_DEV_MODE"))

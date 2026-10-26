@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from ml.src.analysis_chat import (AnalysisChat, ChatRequest, ChatAnswer, SessionNotFound,
     SessionNotReady, SessionStoreUnavailable, SupabaseChatRepository, ChatContextTooLarge,
     BackendChatRepository, answer_analysis_question)
+from ml.src.analysis_chat import _session_result
 from ml.src.api import ModelFormatError, ModelTransportError
 from ml.src.company_analysis import analyze_company
 from ml.src.service import create_app, ServiceSettings
@@ -41,6 +42,23 @@ class ChatTests(unittest.TestCase):
         self.assertIn('Объяснить риски', messages[1]['content'])
         self.assertIn('Объясни первый инсайт', messages[1]['content'])
         self.assertEqual(self.model.structured.call_args.args[2].max_tool_calls, 0)
+        import json
+        context = json.loads(messages[1]['content'])['saved_analysis']
+        self.assertEqual(context['company_id'], self.result.company_id)
+        self.assertEqual(context['company_row_id'], self.result.company_row_id)
+        self.assertEqual(context['profile'], self.result.profile_snapshot.model_dump(mode='json'))
+        self.assertEqual(context['insights'], [i.model_dump(mode='json') for i in self.result.insights])
+
+    def test_job_columns_own_role_goal_and_company_must_match_snapshot(self):
+        result = _session_result(self.result, self.result.job_id, self.result.company_row_id, 'owner', None)
+        self.assertEqual(result.role, 'owner')
+        self.assertIsNone(result.goal)
+        with self.assertRaises(SessionNotReady):
+            _session_result(self.result, self.result.job_id, 999, 'cfo', None)
+        wrong = self.result.model_copy(deep=True)
+        wrong.profile_snapshot.company_id = 'U_DIFFERENT'
+        with self.assertRaises(SessionNotReady):
+            _session_result(wrong, wrong.job_id, wrong.company_row_id, 'cfo', None)
 
     def test_unknown_citations_rejected_and_sources_taken_from_snapshot(self):
         self.model.structured.return_value = ChatAnswer(answer='test', evidence_refs=['invented'])
@@ -81,6 +99,8 @@ class ChatTests(unittest.TestCase):
             self.assertEqual(request.method, 'GET')
             self.assertEqual(request.url.path, f'/api/v1/analysis/jobs/{job_id}')
             return httpx.Response(200, json={'job_id': str(job_id), 'status': 'completed',
+                                            'company_id': self.result.company_row_id,
+                                            'role': self.result.role, 'goal': self.result.goal,
                                             'result': self.result.model_dump(mode='json')})
         with httpx.Client(transport=httpx.MockTransport(handle)) as client:
             result = BackendChatRepository('http://backend:8080', client).get_result(job_id)
@@ -95,6 +115,7 @@ class ChatTests(unittest.TestCase):
         with patch.dict('os.environ', {'ML_CHAT_RESULT_SOURCE': 'supabase'}), \
              patch('ml.src.analysis_chat.SupabaseSettings') as settings, \
              patch('ml.src.analysis_chat.SupabaseChatRepository') as repository, \
+             patch('ml.src.analysis_chat.ModelSettings.from_environment'), \
              patch('ml.src.analysis_chat.GatewayClient', return_value=self.model):
             repository.return_value = self.repo
             response = answer_analysis_question(self.result.job_id, 'Что это значит?')
@@ -143,11 +164,15 @@ class ChatTests(unittest.TestCase):
         engine = MagicMock()
         conn = engine.connect.return_value.__enter__.return_value
         raw = self.result.model_dump_json()
-        rows = [('completed', len(raw.encode()), len(raw), 'version')]
+        rows = [('completed', len(raw.encode()), len(raw), 'version',
+                 self.result.company_row_id, 'ceo', 'Цель из задания', 'updated')]
         rows += [(raw[offset:offset + 1000],) for offset in range(0, len(raw), 1000)]
         conn.execute.return_value.first.side_effect = rows
         result = SupabaseChatRepository(engine).get_result(self.result.job_id)
         self.assertEqual(result.job_id, self.result.job_id)
+        self.assertEqual(result.role, 'ceo')
+        self.assertEqual(result.goal, 'Цель из задания')
+        self.assertEqual(result.profile_snapshot, self.result.profile_snapshot)
         for call in conn.execute.call_args_list:
             self.assertTrue(str(call.args[0]).strip().startswith('SELECT'))
         self.assertIn("md5(result::text)=:version", str(conn.execute.call_args.args[0]))
@@ -160,7 +185,8 @@ class ChatTests(unittest.TestCase):
             conn.execute.return_value.first.return_value = metadata
             with self.assertRaises(error):
                 repo.get_result(uuid4())
-        conn.execute.return_value.first.side_effect = [('completed', 3, 3, 'version'), None]
+        conn.execute.return_value.first.side_effect = [
+            ('completed', 3, 3, 'version', 123, 'cfo', None, 'updated'), None]
         with self.assertRaises(SessionNotReady):
             repo.get_result(uuid4())
         conn.execute.side_effect = SQLAlchemyError('secret DB detail')

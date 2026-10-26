@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
-from dotenv import load_dotenv
+from .runtime_environment import load_runtime_environment
 from psycopg import ClientCursor
 from pydantic import ValidationError
 from sqlalchemy import URL, create_engine, text
@@ -160,7 +160,7 @@ class SupabaseSettings:
 
     def __init__(self, environ: Mapping[str, str] | None = None):
         if environ is None:
-            load_dotenv(ROOT / ".env", override=False)
+            load_runtime_environment()
             environ = os.environ
         required = ("POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD",
                     "POSTGRES_DB", "POSTGRES_CONNECTION_MODE")
