@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
@@ -38,7 +39,17 @@ class ChatContextTooLarge(Exception):
 
 class ChatTurn(Contract):
     role: Literal['user', 'assistant']
-    content: str = Field(min_length=1, max_length=4000)
+    content: str = Field(min_length=1, max_length=8000)
+    # Accept the existing backend ChatMessage JSON without dropping its metadata.
+    id: UUID | None = None
+    created_at: datetime | None = None
+
+    @field_validator('content')
+    @classmethod
+    def nonblank(cls, value):
+        if not value.strip():
+            raise ValueError('history content must not be blank')
+        return value.strip()
 
 
 class ChatRequest(Contract):
@@ -60,11 +71,28 @@ class ChatAnswer(Contract):
     evidence_refs: list[str] = Field(default_factory=list, max_length=48)
     insufficient_context: bool = False
 
+    @field_validator('answer')
+    @classmethod
+    def nonblank(cls, value):
+        if not value.strip():
+            raise ValueError('answer must not be blank')
+        return value.strip()
+
+
+class ChatSource(Contract):
+    evidence_id: str
+    title: str
+    url: str | None
+    publisher: str | None
+    published_at: datetime | None
+    page_number: int | None
+    quote: str
+
 
 class ChatResponse(ChatAnswer):
     job_id: UUID
-    sources: list[dict] = Field(default_factory=list)
-    mode: str = 'saved_analysis'
+    sources: list[ChatSource] = Field(default_factory=list)
+    mode: Literal['saved_analysis'] = 'saved_analysis'
 
 
 class BackendChatRepository:
@@ -78,7 +106,7 @@ class BackendChatRepository:
             raise SessionStoreUnavailable('invalid ML_BACKEND_URL')
 
     def get_result(self, job_id: UUID) -> AnalysisResult:
-        client = self.client or httpx.Client(timeout=10, follow_redirects=False)
+        client = self.client or httpx.Client(timeout=10, follow_redirects=False, trust_env=False)
         try:
             headers = {'Authorization': f'Bearer {self.token}'} if self.token else {}
             with client.stream('GET', f'{self.base_url}/api/v1/analysis/jobs/{job_id}',
@@ -160,6 +188,10 @@ class AnalysisChat:
             raise SessionNotReady('saved result does not match session')
         if result.outcome == 'failed':
             raise SessionNotReady('analysis failed')
+        if not result.insights and not result.evidence and not result.research_context:
+            return ChatResponse(job_id=request.job_id, insufficient_context=True,
+                                answer='В этой сессии нет сохранённых инсайтов и источников. '
+                                       'Пояснить результат по имеющимся данным невозможно.')
         evidence = {e.evidence_id: e for e in result.evidence}
         if result.research_context:
             evidence.update((e.evidence_id, e) for e in result.research_context.evidence)
@@ -174,7 +206,7 @@ class AnalysisChat:
         }
         # Never silently truncate the evidence of an answer.
         content = json.dumps({'saved_analysis': context,
-                              'history': [t.model_dump() for t in request.history],
+                              'history': [t.model_dump(mode='json') for t in request.history],
                               'question': request.message}, ensure_ascii=False)
         if len(content) > 65000:
             raise ChatContextTooLarge('session context and history exceed chat input limit')
@@ -202,7 +234,7 @@ def answer_analysis_question(job_id: UUID | str, message: str, *,
     """Explain one saved session. Does not search, persist messages or update jobs."""
     request = ChatRequest(job_id=job_id, message=message, history=history or [])
     load_dotenv(ROOT / '.env', override=False)
-    source = os.getenv('ML_CHAT_RESULT_SOURCE', 'backend')
+    source = os.getenv('ML_CHAT_RESULT_SOURCE', 'supabase')
     engine = None
     model = None
     try:

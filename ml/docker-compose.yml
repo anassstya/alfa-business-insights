@@ -32,7 +32,7 @@ services:
       ML_CALLBACK_TOKEN: ${ML_CALLBACK_TOKEN:-}
       ML_CALLBACK_TIMEOUT: ${ML_CALLBACK_TIMEOUT:-5}
       ML_EVIDENCE_CACHE: /app/ml/.cache/web
-      ML_CHAT_RESULT_SOURCE: ${ML_CHAT_RESULT_SOURCE:-backend}
+      ML_CHAT_RESULT_SOURCE: ${ML_CHAT_RESULT_SOURCE:-supabase}
       ML_BACKEND_URL: ${ML_BACKEND_URL:-http://backend:8080}
       ML_BACKEND_TOKEN: ${ML_BACKEND_TOKEN:-}
     volumes:

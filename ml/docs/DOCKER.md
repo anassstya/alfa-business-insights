@@ -55,8 +55,13 @@ docker compose --env-file .env --env-file ml/docker.example -f ml/docker-compose
 ## Готовность
 
 Предыдущая версия ML поднята и проверена в Docker: health, доступ из общей сети,
-Supabase и Tavily. Новые изменения чата ещё не пересобраны и не развёрнуты;
-не считать черновой чат доступным в работающем контейнере.
-Сейчас обновляется документация, без перезапуска сервисов.
+Supabase и Tavily. В образ включены модуль и prompt чата. По умолчанию
+`ML_CHAT_RESULT_SOURCE=supabase`: нужны SELECT к `analysis_jobs` и существующий
+ключ модели. `/internal/chat` использует тот же `ML_SERVICE_TOKEN`.
+
+На проверке 26 октября Docker Desktop запущен, но Engine не отвечает на CLI;
+поэтому новая версия пока не подтверждена в работающем контейнере. После
+восстановления Engine выполнить команду сборки выше. Проверки кода и настоящей
+модели прошли на хосте. [Подключение чата](CHAT_INTEGRATION.md).
 
 Формат вызова и callback: [BACKEND_INTEGRATION.md](BACKEND_INTEGRATION.md).

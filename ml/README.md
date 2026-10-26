@@ -61,6 +61,7 @@ docker compose --env-file .env --env-file ml/docker.example -f ml/docker-compose
 - [Данные и контракты](docs/DATA_CONTRACTS.md).
 - [Текущее состояние и следующие шаги, включая чат](docs/IMPLEMENTATION_PLAN.md).
 
-Чат начат в исходниках, но ещё не проверен целиком и не развёрнут в Docker.
-Доступа SELECT к `analysis_jobs` у ML нет: для чата нужен сохранённый результат
-от бэкенда. Детали текущего чернового контракта — в инструкции интеграции.
+Чат: `POST /internal/chat` принимает `job_id`, текущий `message` и `history`.
+ML читает результат из Supabase и отвечает по сохранённым инсайтам и источникам,
+без нового веб-поиска. История и сохранение ответа остаются у backend.
+Контракт и подключение: [docs/CHAT_INTEGRATION.md](docs/CHAT_INTEGRATION.md).

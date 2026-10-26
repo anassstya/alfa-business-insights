@@ -1,4 +1,4 @@
-"""Internal HTTP transport for the fixture pipeline. ml.src.api is the LLM client."""
+"""Internal HTTP transport for analysis and session chat. api.py is the LLM client."""
 
 from __future__ import annotations
 
@@ -154,7 +154,8 @@ def create_app(*, settings: ServiceSettings | None = None,
             raise HTTPException(413, detail={"code": "chat_context_too_large"}) from exc
         except (SessionStoreUnavailable, ProfileStoreUnavailable) as exc:
             raise HTTPException(503, detail={"code": "session_store_unavailable",
-                                "message": "Check backend result endpoint; in supabase mode check SELECT permission"}) from exc
+                                "message": "Check database availability and analysis_jobs SELECT permission; "
+                                           "in backend mode check the result endpoint"}) from exc
         except ModelFormatError as exc:
             raise HTTPException(502, detail={"code": "chat_answer_invalid"}) from exc
         except (ModelError, BudgetExceeded) as exc:
